@@ -7970,7 +7970,9 @@ static Optional<SolutionApplicationTarget> applySolutionToForEachStmt(
   // Get the conformance of the sequence type to the Sequence protocol.
   auto stmt = forEachStmtInfo.stmt;
   auto sequenceProto = TypeChecker::getProtocol(
-      cs.getASTContext(), stmt->getForLoc(), KnownProtocolKind::Sequence);
+      cs.getASTContext(), stmt->getForLoc(), 
+      stmt->isAsync() ? 
+        KnownProtocolKind::AsyncSequence : KnownProtocolKind::Sequence);
   auto contextualLocator = cs.getConstraintLocator(
       target.getAsExpr(), LocatorPathElt::ContextualType());
   auto sequenceConformance = solution.resolveConformance(
