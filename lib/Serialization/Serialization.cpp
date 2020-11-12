@@ -2219,6 +2219,14 @@ class Serializer::DeclSerializer : public DeclVisitor<DeclSerializer> {
     }
   #include "swift/AST/Attr.def"
 
+    case DAK_Rethrows: {
+      auto abbrCode = S.DeclTypeAbbrCodes[RethrowsDeclAttrLayout::Code];
+      RethrowsDeclAttrLayout::emitRecord(S.Out, S.ScratchRecord, abbrCode,
+                                         DA->isImplicit());
+      return;
+    }
+
+
     case DAK_SILGenName: {
       auto *theAttr = cast<SILGenNameAttr>(DA);
       auto abbrCode = S.DeclTypeAbbrCodes[SILGenNameDeclAttrLayout::Code];

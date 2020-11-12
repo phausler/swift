@@ -600,6 +600,33 @@ public:
  typedef SimpleDeclAttr<DAK_##CLASS> CLASS##Attr;
 #include "swift/AST/Attr.def"
 
+class RethrowsAttr : public DeclAttribute {
+  bool protocolDefinition = false;
+public:
+  RethrowsAttr(bool IsImplicit)
+    : DeclAttribute(DAK_Rethrows, SourceLoc(), SourceLoc(), IsImplicit) {}
+
+  RethrowsAttr(SourceLoc AtLoc, SourceLoc NameLoc)
+    : DeclAttribute(DAK_Rethrows, AtLoc,
+                    SourceRange(AtLoc.isValid() ? AtLoc : NameLoc, NameLoc),
+                    /*Implicit=*/false) { }
+  RethrowsAttr(SourceLoc NameLoc)
+    : DeclAttribute(DAK_Rethrows, SourceLoc(), SourceRange(NameLoc, NameLoc),
+                    /*Implicit=*/false) { }
+
+  bool isDefinedByProtocol() const {
+    return protocolDefinition;
+  }
+
+  void setDefinedByProtocol(bool v) {
+    protocolDefinition = v;
+  }
+
+  static bool classof(const DeclAttribute *DA) {
+    return DA->getKind() == DAK_Rethrows;
+  }
+};
+
 /// Defines the @_silgen_name attribute.
 class SILGenNameAttr : public DeclAttribute {
 public:

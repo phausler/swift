@@ -1894,6 +1894,11 @@ namespace decls_block {
   >;
 #include "swift/AST/Attr.def"
 
+  using RethrowsDeclAttrLayout = BCRecordLayout< \
+    Rethrows_DECL_ATTR, \
+    BCFixed<1> /* implicit flag */ \
+  >;
+
   using DynamicReplacementDeclAttrLayout = BCRecordLayout<
     DynamicReplacement_DECL_ATTR,
     BCFixed<1>, // implicit flag

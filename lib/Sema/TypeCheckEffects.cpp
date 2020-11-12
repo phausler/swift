@@ -116,6 +116,19 @@ public:
     return TheExpr;
   }
 
+  bool isRethrowingByProtocol() const {
+    switch (getKind()) {
+    case Kind::Opaque: return false;
+    case Kind::Function: 
+      if (auto attr = getFunction()->getAttrs().getAttribute<RethrowsAttr>()) {
+        return attr->isDefinedByProtocol();
+      }
+      return false;
+    case Kind::Closure: return false;
+    case Kind::Parameter: return false;
+    }
+  }
+
   static AbstractFunction decomposeApply(ApplyExpr *apply,
                                          SmallVectorImpl<Expr*> &args) {
     Expr *fn;
@@ -279,6 +292,8 @@ public:
     /// The function is 'rethrows', and it was passed a default
     /// argument that was not rethrowing-only in this context.
     CallRethrowsWithDefaultThrowingArgument,
+
+    CallRethrowFromExternalSource,
   };
 
   static StringRef kindToString(Kind k) {
@@ -290,6 +305,8 @@ public:
         return "CallRethrowsWithExplicitThrowingArgument";
       case Kind::CallRethrowsWithDefaultThrowingArgument: 
         return "CallRethrowsWithDefaultThrowingArgument";
+      case Kind::CallRethrowFromExternalSource:
+        return "CallRethrowFromExternalSource";
     }
   }
 
@@ -303,6 +320,9 @@ public:
     PotentialThrowReason result(Kind::CallRethrowsWithExplicitThrowingArgument);
     result.TheExpression = E;
     return result;
+  }
+  static PotentialThrowReason forRethrowsFromExternal() {
+    return PotentialThrowReason(Kind::CallRethrowFromExternalSource);
   }
   static PotentialThrowReason forDefaultArgument() {
     return PotentialThrowReason(Kind::CallRethrowsWithDefaultThrowingArgument);
@@ -323,7 +343,8 @@ public:
   bool isThrow() const { return getKind() == Kind::Throw; }
   bool isRethrowsCall() const {
     return (getKind() == Kind::CallRethrowsWithExplicitThrowingArgument ||
-            getKind() == Kind::CallRethrowsWithDefaultThrowingArgument);
+            getKind() == Kind::CallRethrowsWithDefaultThrowingArgument ||
+            getKind() == Kind::CallRethrowFromExternalSource);
   }
 
   /// If this was built with forRethrowsArgument, return the expression.
@@ -513,8 +534,18 @@ public:
       if (!type) return Classification::forInvalidCode();
 
       // Use the most significant result from the arguments.
-      Classification result = isAsync ? Classification::forAsync() 
-                                      : Classification();
+
+      Classification result;
+
+      if (fnRef.isRethrowingByProtocol()) {
+        PotentialThrowReason reason = PotentialThrowReason::forRethrowsFromExternal();
+        result = isAsync ? Classification::forRethrowingOnly(reason, /*async*/true)
+                         : Classification::forRethrowingOnly(reason, /*async*/false);
+      } else {
+        result = isAsync ? Classification::forAsync() 
+                         : Classification();
+      }
+
       for (auto arg : llvm::reverse(args)) {
         auto fnType = type->getAs<AnyFunctionType>();
         if (!fnType) return Classification::forInvalidCode();
@@ -1140,6 +1171,9 @@ public:
       return;
     case PotentialThrowReason::Kind::CallRethrowsWithDefaultThrowingArgument:
       Diags.diagnose(loc, diag::because_rethrows_default_argument_throws);
+      return;
+    case PotentialThrowReason::Kind::CallRethrowFromExternalSource:
+      Diags.diagnose(loc, diag::because_rethrows_argument_throws); // TODO: FIXME
       return;
     }
     llvm_unreachable("bad reason kind");

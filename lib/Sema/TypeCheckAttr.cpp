@@ -2158,7 +2158,7 @@ static bool hasThrowingFunctionParameter(CanType type) {
 }
 
 void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
-  // 'rethrows' only applies to functions that take throwing functions
+  // 'rethrows' applies to functions that take throwing functions
   // as parameters.
   auto fn = cast<AbstractFunctionDecl>(D);
   for (auto param : *fn->getParameters()) {
@@ -2168,6 +2168,26 @@ void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
       return;
   }
 
+  auto DC = D->getDeclContext();
+  // or this may be 'rethrows' if it is being defined in a protocol
+  if (DC->getSelfProtocolDecl()) {
+    attr->setDefinedByProtocol(true);
+    return;
+  } else {
+    auto protocols = DC->getSelfNominalTypeDecl()->getAllProtocols();
+
+    // or if this function is satisfying a protocol requirement 
+    // function that requires 'rethrows'
+    for (auto protocol : protocols) {
+      for (auto member : protocol->lookupDirect(fn->getName())) {
+        if (auto memberFunc = dyn_cast<FuncDecl>(member)) {
+          attr->setDefinedByProtocol(true);
+          // TODO: FIXME, this should ensure the function is 100% defined by this specific member
+          return;
+        }
+      }
+    }
+  }
   diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);
   attr->setInvalid();
 }

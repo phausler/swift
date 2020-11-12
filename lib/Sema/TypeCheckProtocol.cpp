@@ -561,8 +561,12 @@ swift::matchWitness(
     // rethrows or be non-throwing.
     if (reqAttrs.hasAttribute<RethrowsAttr>() &&
         !witnessAttrs.hasAttribute<RethrowsAttr>() &&
-        cast<AbstractFunctionDecl>(witness)->hasThrows())
-      return RequirementMatch(witness, MatchKind::RethrowsConflict);
+        cast<AbstractFunctionDecl>(witness)->hasThrows()) {
+      auto attr = reqAttrs.getAttribute<RethrowsAttr>();
+      if (!attr->isDefinedByProtocol()) {
+        return RequirementMatch(witness, MatchKind::RethrowsConflict);
+      }
+    }
 
     // We want to decompose the parameters to handle them separately.
     decomposeFunctionType = true;

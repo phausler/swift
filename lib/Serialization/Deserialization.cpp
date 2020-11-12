@@ -4493,6 +4493,14 @@ llvm::Error DeclDeserializer::deserializeDeclAttributes() {
       }
 #include "swift/AST/Attr.def"
 
+      case decls_block::Rethrows_DECL_ATTR: {
+        bool isImplicit;
+        serialization::decls_block::RethrowsDeclAttrLayout::readRecord(
+            scratch, isImplicit);
+        Attr = new (ctx) RethrowsAttr(isImplicit);
+        break;
+      }
+
       default:
         // We don't know how to deserialize this kind of attribute.
         MF.fatal();

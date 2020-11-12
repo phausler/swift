@@ -354,7 +354,7 @@ DECL_ATTR(_alignment, Alignment,
   UserInaccessible |
   ABIStableToAdd | ABIStableToRemove | APIStableToAdd | APIStableToRemove,
   56)
-SIMPLE_DECL_ATTR(rethrows, Rethrows,
+DECL_ATTR(rethrows, Rethrows,
   OnFunc | OnAccessor | OnConstructor |
   RejectByParser |
   ABIStableToAdd | ABIStableToRemove | APIStableToAdd | APIStableToRemove,
