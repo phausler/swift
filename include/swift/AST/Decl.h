@@ -3197,6 +3197,8 @@ public:
     return getGlobalActorInstance() != nullptr;
   }
 
+  bool isRethrowingByProtocol();
+
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) {
     return D->getKind() >= DeclKind::First_NominalTypeDecl &&
@@ -3867,6 +3869,8 @@ class ProtocolDecl final : public NominalTypeDecl {
   /// by this protocol.
   const Requirement *RequirementSignature = nullptr;
 
+  bool SourceOfRethrows = false;
+
   /// Returns the cached result of \c requiresClass or \c None if it hasn't yet
   /// been computed.
   Optional<bool> getCachedRequiresClass() const {
@@ -4016,6 +4020,8 @@ public:
   /// contain 'Self' in 'parameter' or 'other' position.
   bool existentialTypeSupported() const;
 
+  bool isSourceOfRethrows() const;
+  void setIsSourceOfRethrows(bool v);
 private:
   void computeKnownProtocolKind() const;
 

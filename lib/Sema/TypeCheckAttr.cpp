@@ -2170,7 +2170,8 @@ void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
 
   auto DC = D->getDeclContext();
   // or this may be 'rethrows' if it is being defined in a protocol
-  if (DC->getSelfProtocolDecl()) {
+  if (auto containingProtocol = DC->getSelfProtocolDecl()) {
+    containingProtocol->setIsSourceOfRethrows(true);
     attr->setDefinedByProtocol(true);
     return;
   } else {

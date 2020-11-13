@@ -1112,6 +1112,49 @@ NominalTypeDecl::takeConformanceLoaderSlow() {
   return { contextInfo->loader, contextInfo->allConformancesData };
 }
 
+bool NominalTypeDecl::isRethrowingByProtocol() {
+  SmallVector<ValueDecl *, 8> directRethrowingPotentials;
+  for (auto proto : getAllProtocols()) {
+    if (proto->isSourceOfRethrows()) {
+      for (auto member : proto->getMembers()) {
+        if (auto named = dyn_cast<ValueDecl>(member)) {
+          DeclName name = named->getName();
+          auto direct = lookupDirect(name);
+          directRethrowingPotentials.append(direct.begin(), direct.end());
+        }
+      }
+    }
+  }
+  for (auto direct : directRethrowingPotentials) {
+    if (auto fn = dyn_cast<AbstractFunctionDecl>(direct)) {
+      if (fn->hasThrows()) {
+        if (auto attr = fn->getAttrs().getAttribute<RethrowsAttr>()) {
+          // func has rethrows so skipping to the next
+          continue;
+        } else {
+          // func has throws (but not rethrows) so claiming rethrowing by protocol
+          return true;
+        }
+      }
+    }
+  }
+
+  for (auto conformance : getAllConformances()) {
+    if (auto specialized = dyn_cast<SpecializedProtocolConformance>(conformance)) {
+      auto substitutions = specialized->getSubstitutionMap();
+      for (auto Ty : substitutions.getReplacementTypes()) {
+        if (auto nominal = Ty->getNominalOrBoundGenericNominal()) {
+          if (nominal->isRethrowingByProtocol()) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  // no throwing sources found!
+  return false;
+}
+
 ExtensionDecl::ExtensionDecl(SourceLoc extensionLoc,
                              TypeRepr *extendedType,
                              ArrayRef<TypeLoc> inherited,
@@ -5034,6 +5077,28 @@ bool ProtocolDecl::hasCircularInheritedProtocols() const {
   auto *mutableThis = const_cast<ProtocolDecl *>(this);
   return evaluateOrDefault(
       ctx.evaluator, HasCircularInheritedProtocolsRequest{mutableThis}, true);
+}
+
+
+bool ProtocolDecl::isSourceOfRethrows() const {
+  if (SourceOfRethrows) {
+    return true;
+  } else {
+    bool found = false;
+    walkInheritedProtocols([&found](ProtocolDecl *inherited) {
+      if (inherited->SourceOfRethrows) {
+        found = true;
+        return TypeWalker::Action::Stop;
+      }
+
+      return TypeWalker::Action::Continue;
+    });
+    return found;
+  }
+}
+
+void ProtocolDecl::setIsSourceOfRethrows(bool v) {
+  SourceOfRethrows = v;
 }
 
 StorageImplInfo AbstractStorageDecl::getImplInfo() const {

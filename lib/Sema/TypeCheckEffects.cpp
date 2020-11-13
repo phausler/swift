@@ -116,14 +116,48 @@ public:
     return TheExpr;
   }
 
-  bool isRethrowingByProtocol() const {
+  bool isRethrowingByProtocol(ApplyExpr *E) const {
     switch (getKind()) {
     case Kind::Opaque: return false;
-    case Kind::Function: 
-      if (auto attr = getFunction()->getAttrs().getAttribute<RethrowsAttr>()) {
-        return attr->isDefinedByProtocol();
+    case Kind::Function: {
+      auto fn = getFunction();
+      if (auto attr = fn->getAttrs().getAttribute<RethrowsAttr>()) {
+        if (attr->isDefinedByProtocol()) {
+          class RethrowWalker: public ASTWalker {
+          public:
+            bool found = false;
+            std::pair<bool, Expr *> walkToExprPre(Expr *E) {
+              if (auto DRE = dyn_cast<DeclRefExpr>(E)) {
+                auto subst = DRE->getDeclRef().getSubstitutions();
+                for (auto Ty : subst.getReplacementTypes()) {
+                  if (auto nominal = Ty->getNominalOrBoundGenericNominal()) {
+                    if (nominal->isRethrowingByProtocol()) {
+                      found = true;
+                      return { false, nullptr };
+                    }
+                  }
+                }
+              }
+              return { true, E };
+            }
+          };
+          RethrowWalker walker;
+          E->walk(walker);
+          
+          if (walker.found == false) {
+            auto DC = fn->getDeclContext();
+            if (DC->getSelfProtocolDecl()) {
+              // this is in a protocol definition so claim it to be rethrows
+              walker.found = true;
+            }
+          }
+
+          return walker.found;
+        }
+        
       }
       return false;
+    }
     case Kind::Closure: return false;
     case Kind::Parameter: return false;
     }
@@ -537,7 +571,7 @@ public:
 
       Classification result;
 
-      if (fnRef.isRethrowingByProtocol()) {
+      if (fnRef.isRethrowingByProtocol(E)) {
         PotentialThrowReason reason = PotentialThrowReason::forRethrowsFromExternal();
         result = isAsync ? Classification::forRethrowingOnly(reason, /*async*/true)
                          : Classification::forRethrowingOnly(reason, /*async*/false);
