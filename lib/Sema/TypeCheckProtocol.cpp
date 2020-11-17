@@ -558,10 +558,12 @@ swift::matchWitness(
       return RequirementMatch(witness, MatchKind::MutatingConflict);
 
     // If the requirement is rethrows, the witness must either be
-    // rethrows or be non-throwing.
+    // rethrows or be non-throwing if there is a parameter that is determining 
+    // rethrowing
     if (reqAttrs.hasAttribute<RethrowsAttr>() &&
         !witnessAttrs.hasAttribute<RethrowsAttr>() &&
-        cast<AbstractFunctionDecl>(witness)->hasThrows())
+        cast<AbstractFunctionDecl>(witness)->hasThrows() &&
+        cast<AbstractFunctionDecl>(witness)->hasThrowingParameter())
       return RequirementMatch(witness, MatchKind::RethrowsConflict);
 
     // We want to decompose the parameters to handle them separately.

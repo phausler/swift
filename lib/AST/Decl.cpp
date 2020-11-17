@@ -7054,6 +7054,43 @@ void AbstractFunctionDecl::setParameters(ParameterList *BodyParams) {
   BodyParams->setDeclContextOfParamDecls(this);
 }
 
+static bool hasThrowingFunctionParameter(CanType type) {
+  // Only consider throwing function types.
+  if (auto fnType = dyn_cast<AnyFunctionType>(type)) {
+    return fnType->getExtInfo().isThrowing();
+  }
+
+  // Look through tuples.
+  if (auto tuple = dyn_cast<TupleType>(type)) {
+    for (auto eltType : tuple.getElementTypes()) {
+      if (hasThrowingFunctionParameter(eltType))
+        return true;
+    }
+    return false;
+  }
+
+  // Suppress diagnostics in the presence of errors.
+  if (type->hasError()) {
+    return true;
+  }
+
+  return false;
+}
+
+bool AbstractFunctionDecl::hasThrowingParameter() const {
+  for (auto param : *getParameters()) {
+    if (hasThrowingFunctionParameter(param->getType()
+            ->lookThroughAllOptionalTypes()
+            ->getCanonicalType()))
+      return true;
+  }
+  return false;
+}
+
+bool AbstractFunctionDecl::hasRethrows() const {
+  return getAttrs().hasAttribute<RethrowsAttr>();
+}
+
 OpaqueTypeDecl::OpaqueTypeDecl(ValueDecl *NamingDecl,
                                GenericParamList *GenericParams,
                                DeclContext *DC,
