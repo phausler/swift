@@ -2134,42 +2134,61 @@ void AttributeChecker::visitRequiredAttr(RequiredAttr *attr) {
   }
 }
 
-static bool hasThrowingFunctionParameter(CanType type) {
-  // Only consider throwing function types.
-  if (auto fnType = dyn_cast<AnyFunctionType>(type)) {
-    return fnType->getExtInfo().isThrowing();
-  }
+// static bool isSourceOfRethrowing(NominalTypeDecl *Nominal) {
+//   printf("checking to see if %s is a source of throwing\n", Nominal->getNameStr().data());
+  
+//   for (auto member : Nominal->getSemanticMembers()) {
+//     if (auto fn = dyn_cast<AbstractFunctionDecl>(member)) {
+//       if (fn->hasRethrows() && !fn->hasThrowingParameter()) {
+//         return true;
+//       }
+//     }
+//   }
+//   for (auto proto : Nominal->getLocalProtocols()) {
+//     if (isSourceOfRethrowing(proto)) {
+//       return true;
+//     }
+//   }
+//   return false;
+// }
 
-  // Look through tuples.
-  if (auto tuple = dyn_cast<TupleType>(type)) {
-    for (auto eltType : tuple.getElementTypes()) {
-      if (hasThrowingFunctionParameter(eltType))
-        return true;
-    }
-    return false;
-  }
-
-  // Suppress diagnostics in the presence of errors.
-  if (type->hasError()) {
-    return true;
-  }
-
-  return false;
-}
+// static bool isSourceOfRethrowing(Type Ty) {
+//   if (auto nominal = Ty->getNominalOrBoundGenericNominal()) {
+//     return isSourceOfRethrowing(nominal);
+//   }
+//   return false;
+// }
 
 void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
-  // 'rethrows' only applies to functions that take throwing functions
-  // as parameters.
-  auto fn = cast<AbstractFunctionDecl>(D);
-  for (auto param : *fn->getParameters()) {
-    if (hasThrowingFunctionParameter(param->getType()
-            ->lookThroughAllOptionalTypes()
-            ->getCanonicalType()))
-      return;
-  }
+  // rethrowing must be determined after we have an expression
+  return;
+  // // 'rethrows' applies to functions that take throwing functions
+  // // as parameters.
+  // auto fn = cast<AbstractFunctionDecl>(D);
+  // if (fn->hasThrowingParameter()) {
+  //   return;
+  // }
 
-  diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);
-  attr->setInvalid();
+  // auto DC = fn->getDeclContext();
+  // // or protocol requirements
+  // if (isa<ProtocolDecl>(DC) && fn->isProtocolRequirement()) {
+  //   return;
+  // }
+
+  // // or a function with generic requirements that has a source of rethrowing
+  // for (auto requirement : fn->getGenericRequirements()) {
+  //   if (isSourceOfRethrowing(requirement.getFirstType())) {
+  //     return;
+  //   }
+  //   if (requirement.getKind() != RequirementKind::Layout) {
+  //     if (isSourceOfRethrowing(requirement.getSecondType())) {
+  //       return;
+  //     }
+  //   }
+  // }
+
+  // diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);
+  // attr->setInvalid();
 }
 
 /// Collect all used generic parameter types from a given type.

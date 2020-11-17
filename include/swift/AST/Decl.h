@@ -5632,6 +5632,9 @@ public:
   /// Returns true if the function body throws.
   bool hasThrows() const { return Bits.AbstractFunctionDecl.Throws; }
 
+  bool hasThrowingParameter() const;
+  bool hasRethrows() const;
+
   // FIXME: Hack that provides names with keyword arguments for accessors.
   DeclName getEffectiveFullName() const;
 
