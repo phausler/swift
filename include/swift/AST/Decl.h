@@ -2708,6 +2708,7 @@ public:
   /// Retrieve the set of protocols to which this abstract type
   /// parameter conforms.
   ArrayRef<ProtocolDecl *> getConformingProtocols() const;
+  bool isSourceOfRethrows();
 
   static bool classof(const Decl *D) {
     return D->getKind() >= DeclKind::First_AbstractTypeParamDecl &&
@@ -4019,6 +4020,8 @@ public:
   /// all the members do not contain any associated types, and do not
   /// contain 'Self' in 'parameter' or 'other' position.
   bool existentialTypeSupported() const;
+
+  bool isSourceOfRethrows();
 
 private:
   void computeKnownProtocolKind() const;

@@ -3839,6 +3839,15 @@ AbstractTypeParamDecl::getConformingProtocols() const {
   return { };
 }
 
+bool AbstractTypeParamDecl::isSourceOfRethrows() {
+  for (auto proto : getConformingProtocols()) {
+    if (proto->isSourceOfRethrows()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 GenericTypeParamDecl::GenericTypeParamDecl(DeclContext *dc, Identifier name,
                                            SourceLoc nameLoc,
                                            unsigned depth, unsigned index)
@@ -5036,6 +5045,25 @@ bool ProtocolDecl::hasCircularInheritedProtocols() const {
   auto *mutableThis = const_cast<ProtocolDecl *>(this);
   return evaluateOrDefault(
       ctx.evaluator, HasCircularInheritedProtocolsRequest{mutableThis}, true);
+}
+
+bool ProtocolDecl::isSourceOfRethrows() {
+  // check for any functions that are marked as rethrows
+  for (auto member : getMembers()) {
+    auto fnMember = dyn_cast<AbstractFunctionDecl>(member);
+    if (!fnMember || !fnMember->hasRethrows() || fnMember->hasThrowingParameter())
+      continue;
+    return true;
+  }
+  // or check for any associated types constrained to protocols that are a source
+  // of a rethrowing potential
+  for (auto associatedType : getAssociatedTypeMembers()) {
+    if (associatedType->isSourceOfRethrows()) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 StorageImplInfo AbstractStorageDecl::getImplInfo() const {

@@ -23,6 +23,7 @@
 #include "swift/AST/Pattern.h"
 #include "swift/AST/PrettyStackTrace.h"
 #include "swift/AST/ProtocolConformance.h"
+#include "swift/AST/ParameterList.h"
 
 using namespace swift;
 
@@ -40,45 +41,153 @@ private:
     AbstractFunctionDecl *TheFunction;
     AbstractClosureExpr *TheClosure;
     ParamDecl *TheParameter;
-    Expr *TheExpr;
   };
+  Expr *TheExpr = nullptr;
   unsigned TheKind : 2;
   unsigned IsRethrows : 1;
+  unsigned HasRethrowsArguments : 1;
   unsigned ParamCount : 2;
+
+  bool typeIsRethrowsThrowing(Type Ty, DeclContext *DC,
+                              AbstractFunctionDecl *currentFn) {
+    auto NTD = Ty->getNominalOrBoundGenericNominal();
+    if (!NTD) {
+      // if there is no nominal type that means this is 
+      // an abstract generic that hasnt been bound to 
+      // anything yet, so we must presume this is throwing
+      return true;
+    }
+
+    for (auto proto : NTD->getAllProtocols()) {
+      if (!proto->isSourceOfRethrows()) {
+        continue;
+      }
+      SmallVector<ProtocolConformance*, 1> conformances;
+      if (!NTD->lookupConformance(DC->getParentModule(), proto, conformances)) {
+        continue;
+      }
+      for (auto conformance : conformances) {
+        auto root = conformance->getRootConformance();
+        if (!root) {
+          // the conformance must exist in a root form
+          // not sure how this can occur... but we should guard 
+          // against it by presuming a throwing scenario
+          return true;
+        }
+
+        bool hasThrows = false;
+        auto self = this;
+        root->forEachValueWitness(
+          [&hasThrows, &self, &DC, &currentFn](const ValueDecl *req, 
+                                               Witness witness) {
+          auto fn = dyn_cast<AbstractFunctionDecl>(req);
+          if (!fn || !fn->hasRethrows() || fn->hasThrowingParameter())
+            return;
+
+          auto witnessFn = dyn_cast<AbstractFunctionDecl>(witness.getDecl());
+          if (!witnessFn) {
+            // this is probably indicating something went horribly wrong
+            // if the value witness doesnt have a function to go with our
+            // requirement, so presume that this throws
+            hasThrows = true;
+            return;
+          }
+
+          // If we have a directly written throws claim it to be throwing
+          if (witnessFn->hasThrows() && !witnessFn->hasRethrows()) {
+            hasThrows = true;
+          } else if (witnessFn->hasRethrows() &&
+                     !witnessFn->hasThrowingParameter()) {
+            // Dont bother recursing into the current function being inspected
+            if (currentFn == witnessFn) {
+              return;
+            }
+
+            // else we need to recurse in the if check to determine a rethrows 
+            // case's source of throwing by walking up the type declaration  
+            if (self->functionIsRethrowsThrowing(witnessFn, DC)) {
+              hasThrows = true;  
+            }
+          }
+        });
+        // if we have bailed out in any step, stop the iteration since one 
+        // throws will bucket fill the entire rethrowing to be throws
+        if (hasThrows)
+          return true;
+      }
+    }
+    // At this point we have checked everything and no unexpected or determiend
+    // throwing points exist and we can safely claim the false case
+    return false;
+  }
+
+  bool paramIsRethrowsThrowing(ParamDecl *param, DeclContext *DC,
+                               AbstractFunctionDecl *fn) {
+    auto Ty = param->getInterfaceType()
+                   ->lookThroughAllOptionalTypes()
+                   ->getCanonicalType();
+
+    return typeIsRethrowsThrowing(Ty, DC, fn);
+  }
+
+  bool functionIsRethrowsThrowing(AbstractFunctionDecl *fn, DeclContext *DC) {
+    if (auto selfDecl = fn->getImplicitSelfDecl()) {
+      if (paramIsRethrowsThrowing(selfDecl, DC, fn)) {
+        return true;
+      }
+    }
+
+    for (auto param : *fn->getParameters()) {
+      if (paramIsRethrowsThrowing(param, DC, fn)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
 public:
   explicit AbstractFunction(Kind kind, Expr *fn)
     : TheKind(kind),
       IsRethrows(false),
+      HasRethrowsArguments(false),
       ParamCount(1) {
     TheExpr = fn;
   }
 
-  explicit AbstractFunction(AbstractFunctionDecl *fn)
+  explicit AbstractFunction(AbstractFunctionDecl *fn, Expr *E)
     : TheKind(Kind::Function),
-      IsRethrows(fn->getAttrs().hasAttribute<RethrowsAttr>()),
+      IsRethrows(fn->hasRethrows()),
+      HasRethrowsArguments(fn->hasThrowingParameter()),
       ParamCount(fn->getNumCurryLevels()) {
     TheFunction = fn;
+    TheExpr = E;
   }
 
   explicit AbstractFunction(AbstractClosureExpr *closure)
     : TheKind(Kind::Closure),
       IsRethrows(false),
+      HasRethrowsArguments(false),
       ParamCount(1) {
     TheClosure = closure;
   }
 
-  explicit AbstractFunction(ParamDecl *parameter)
+  explicit AbstractFunction(ParamDecl *parameter, Expr *E)
     : TheKind(Kind::Parameter),
       IsRethrows(false),
+      HasRethrowsArguments(false),
       ParamCount(1) {
     TheParameter = parameter;
+    TheExpr = E;
   }
 
   Kind getKind() const { return Kind(TheKind); }
 
   /// Whether the function is marked 'rethrows'.
-  bool isBodyRethrows() const { return IsRethrows; }
+  bool isRethrows() const { return IsRethrows; }
+  bool isRethrowingByArgument() const { 
+    return IsRethrows && HasRethrowsArguments; 
+  }
 
   unsigned getNumArgumentsForFullApply() const {
     return ParamCount;
@@ -115,6 +224,21 @@ public:
   Expr *getOpaqueFunction() const {
     assert(getKind() == Kind::Opaque);
     return TheExpr;
+  }
+
+  ConcreteDeclRef getRef() const {
+    assert(getKind() == Kind::Function || getKind() == Kind::Parameter);
+    if (auto DRE = dyn_cast<DeclRefExpr>(TheExpr)) {
+      return DRE->getDeclRef();
+    } else {
+      return ConcreteDeclRef(TheFunction);
+    }
+  }
+
+  bool isRethrowsThrowing(DeclContext *DC) {
+    assert(IsRethrows && !HasRethrowsArguments);
+
+    return functionIsRethrowsThrowing(TheFunction, DC);
   }
 
   static AbstractFunction decomposeApply(ApplyExpr *apply,
@@ -159,16 +283,16 @@ public:
     
     // Constructor delegation.
     if (auto otherCtorDeclRef = dyn_cast<OtherConstructorDeclRefExpr>(fn)) {
-      return AbstractFunction(otherCtorDeclRef->getDecl());
+      return AbstractFunction(otherCtorDeclRef->getDecl(), otherCtorDeclRef);
     }
 
     // Normal function references.
     if (auto declRef = dyn_cast<DeclRefExpr>(fn)) {
       ValueDecl *decl = declRef->getDecl();
       if (auto fn = dyn_cast<AbstractFunctionDecl>(decl)) {
-        return AbstractFunction(fn);
+        return AbstractFunction(fn, declRef);
       } else if (auto param = dyn_cast<ParamDecl>(decl)) {
-        return AbstractFunction(param);
+        return AbstractFunction(param, declRef);
       }
 
     // Closures.
@@ -270,9 +394,6 @@ public:
     /// The function calls an unconditionally throwing function.
     CallThrows,
 
-    /// The function rethrows from contextual sources
-    CallRethrows,
-
     /// The initializer of an 'async let' unconditionally throws.
     AsyncLetThrows,
 
@@ -289,7 +410,6 @@ public:
     switch (k) {
       case Kind::Throw: return "Throw";
       case Kind::CallThrows: return "CallThrows";
-      case Kind::CallRethrows: return "CallRethrows";
       case Kind::AsyncLetThrows: return "AsyncLetThrows";
       case Kind::CallRethrowsWithExplicitThrowingArgument:
         return "CallRethrowsWithExplicitThrowingArgument";
@@ -314,9 +434,6 @@ public:
   }
   static PotentialThrowReason forThrowingApply() {
     return PotentialThrowReason(Kind::CallThrows);
-  }
-  static PotentialThrowReason forRethrowingApply() {
-    return PotentialThrowReason(Kind::CallRethrows);
   }
   static PotentialThrowReason forThrow() {
     return PotentialThrowReason(Kind::Throw);
@@ -416,7 +533,8 @@ public:
     return result;
   }
 
-  static Classification forRethrowingOnly(PotentialThrowReason reason, bool isAsync) {
+  static Classification 
+  forRethrowingOnly(PotentialThrowReason reason, bool isAsync) {
     Classification result;
     result.Result = ThrowingKind::RethrowingOnly;
     result.Reason = reason;
@@ -442,34 +560,12 @@ public:
   }
   
   bool isAsync() const { return IsAsync; }
-  bool isThrowing() const { return getResult() == ThrowingKind::Throws; }
-  bool isRethrowing() const { return getResult() == ThrowingKind::RethrowingOnly; }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
   LLVM_DUMP_METHOD void dump() const { print(llvm::errs()); }
 #endif
 };
 
-#define DEBUG_DUMP(item) do { \
-  if (getenv("DEBUG_COMPILER")) { item->dump(); } \
-} while (0)
-
-bool protocolDeclarationHasRethrows(ProtocolDecl *proto) {
-  for (auto parent : proto->getInheritedProtocols()) {
-    if (protocolDeclarationHasRethrows(parent)) {
-      return true;
-    }
-  }
-  for (auto member : proto->getMembers()) {
-    if (auto fn = dyn_cast<AbstractFunctionDecl>(member)) {
-      if (fn->hasRethrows() && !fn->hasThrowingParameter()) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
 
 /// A class for collecting information about rethrowing functions.
 class ApplyClassifier {
@@ -479,69 +575,8 @@ class ApplyClassifier {
 
 public:
   DeclContext *RethrowsDC = nullptr;
+  DeclContext *DC = nullptr;
   bool inRethrowsContext() const { return RethrowsDC != nullptr; }
-
-  Classification classifyRethrowing(Type Ty, bool isAsync) {
-    // Types passed in here are expected to be in their bound generic form
-    if (auto nominal = Ty->getNominalOrBoundGenericNominal()) {
-      bool foundThowingConformance = false;
-      // find all protocols that might be a source of rethrowing
-      for (auto conformance : nominal->getAllConformances()) {
-        auto proto = conformance->getProtocol();
-        // check if this conformed protocol has any rethrows potentials
-        if (protocolDeclarationHasRethrows(proto)) {
-          for (auto member : proto->getMembers()) {
-            // only functions can be throwing so that is the only contributer 
-            // to a throwing potential of rethrowness
-            if (auto fn = dyn_cast<AbstractFunctionDecl>(member)) {
-              if (fn->hasRethrows() && !fn->hasThrowingParameter()) {
-                // this likely could be made more accurate?
-                for (auto direct : nominal->lookupDirect(fn->getName())) {
-                  if (auto directFn = dyn_cast<AbstractFunctionDecl>(direct)) {
-                    // ensure that it is actually honestly throwing
-                    if (directFn->hasThrows() && !directFn->hasRethrows()) {
-                      foundThowingConformance = true;
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-            if (foundThowingConformance) {
-              break;
-            }
-          }
-        }
-        if (foundThowingConformance) {
-          break;
-        }
-      }
-      if (!foundThowingConformance) {
-        Classification classification = isAsync ? 
-          Classification::forAsync() : Classification();
-        // peer through any potential sources within self that might be a 
-        // source of rethrowing and merge all cases
-        // if no source would be a throwing implementation of a rethrows
-        // by non argument basis then we can claim that this is not throwing
-        for (auto member : nominal->getMembers()) {
-          if (auto fn = dyn_cast<FuncDecl>(member)) {
-            auto interfaceTy = fn->getResultInterfaceType();
-            // Avoid the simple recursion case of Self...
-            // however this might not be enough...
-            if (!Ty->isEqual(interfaceTy)) {
-              classification.merge(classifyRethrowing(interfaceTy, isAsync));
-            }
-          }
-        }
-        return classification;
-      }
-    } else if (auto IOT = dyn_cast<InOutType>(Ty.getPointer())) {
-      // this handles the case of peering into the inout of a potential mutation
-      return classifyRethrowing(IOT->getObjectType(), isAsync);
-    }
-
-    return Classification::forThrow(PotentialThrowReason::forRethrowingApply(), isAsync);
-  }
 
   /// Check to see if the given function application throws or is async.
   Classification classifyApply(ApplyExpr *E) {
@@ -564,19 +599,6 @@ public:
     // Decompose the application.
     SmallVector<Expr*, 4> args;
     auto fnRef = AbstractFunction::decomposeApply(E, args);
-
-    if (fnRef.getKind() == AbstractFunction::Function &&
-      fnRef.getFunction()->hasRethrows() &&
-      !fnRef.getFunction()->hasThrowingParameter()) {
-      if (auto CE = dyn_cast<CallExpr>(E)) {
-        if (auto fnApply = dyn_cast<ApplyExpr>(CE->getFn())) {
-          if (auto arg = fnApply->getArg()) {
-            return classifyRethrowing(arg->getValueProvidingExpr()->getType(), isAsync);
-          }
-        }
-      }
-      return Classification::forThrow(PotentialThrowReason::forRethrowingApply(), isAsync);
-    }
 
     // If any of the arguments didn't type check, fail.
     for (auto arg : args) {
@@ -610,7 +632,7 @@ public:
 
     // If the function's body is 'rethrows' for the number of
     // arguments we gave it, apply the rethrows logic.
-    if (fnRef.isBodyRethrows()) {
+    if (fnRef.isRethrowingByArgument()) {
       // We need to walk the original parameter types in parallel
       // because it only counts for 'rethrows' purposes if it lines up
       // with a throwing function parameter in the original type.
@@ -630,6 +652,15 @@ public:
         type = fnType->getResult();
       }
       return result;
+    } else if (fnRef.isRethrows() && DC != nullptr) {
+      if (fnRef.isRethrowsThrowing(DC)) {
+        return Classification::forThrow(
+          PotentialThrowReason::forThrowingApply(), isAsync);
+      } else if (isAsync) {
+        return Classification::forAsync();
+      } else {
+        return Classification();
+      }
     }
 
     // Try to classify the implementation of functions that we have
@@ -917,6 +948,12 @@ private:
       paramType = paramTupleType->getElementType(0);
     }
 
+    // Otherwise, if the original parameter type was not a throwing
+    // function type, it does not contribute to 'rethrows'.
+    auto paramFnType = paramType->lookThroughAllOptionalTypes()->getAs<AnyFunctionType>();
+    if (!paramFnType || !paramFnType->isThrowing())
+      return Classification();
+
     PotentialThrowReason reason = PotentialThrowReason::forRethrowsArgument(arg);
 
     // TODO: partial applications?
@@ -1021,6 +1058,7 @@ private:
   }
 
   Kind TheKind;
+  DeclContext *DC;
   Optional<AnyFunctionRef> Function;
   bool HandlesErrors = false;
   bool HandlesAsync = false;
@@ -1037,9 +1075,9 @@ private:
     assert(TheKind != Kind::PotentiallyHandled);
   }
 
-  explicit Context(bool handlesErrors, bool handlesAsync,
+  explicit Context(DeclContext *DC, bool handlesErrors, bool handlesAsync,
                    Optional<AnyFunctionRef> function)
-    : TheKind(Kind::PotentiallyHandled), Function(function),
+    : TheKind(Kind::PotentiallyHandled), DC(DC), Function(function),
       HandlesErrors(handlesErrors), HandlesAsync(handlesAsync) { }
 
 public:
@@ -1050,8 +1088,8 @@ public:
     DiagnoseErrorOnTry = b;
   }
 
-  /// Whether this is a function that rethrows (by parameter!)
-  bool isRethrowsByParameter() const {
+  /// Whether this is a function that rethrows.
+  bool isRethrows() const {
     if (!HandlesErrors)
       return false;
 
@@ -1065,7 +1103,24 @@ public:
     if (!fn)
       return false;
 
-    return fn->getAttrs().hasAttribute<RethrowsAttr>() && fn->hasThrowingParameter();
+    return fn->hasRethrows();
+  }
+
+  bool isRethrowingByArgument() const {
+    if (!HandlesErrors)
+      return false;
+
+    if (ErrorHandlingIgnoresFunction)
+      return false;
+
+    if (!Function)
+      return false;
+
+    auto fn = Function->getAbstractFunctionDecl();
+    if (!fn)
+      return false;
+
+    return fn->hasThrowingParameter();
   }
 
   /// Whether this is an autoclosure.
@@ -1085,7 +1140,7 @@ public:
 
   static Context forTopLevelCode(TopLevelCodeDecl *D) {
     // Top-level code implicitly handles errors and 'async' calls.
-    return Context(/*handlesErrors=*/true, /*handlesAsync=*/true, None);
+    return Context(D->getDeclContext(), /*handlesErrors=*/true, /*handlesAsync=*/true, None);
   }
 
   static Context forFunction(AbstractFunctionDecl *D) {
@@ -1105,10 +1160,7 @@ public:
       }
     }
 
-    if (D->hasRethrows() && !D->hasThrowingParameter()) {
-      return Context(true, D->isAsyncContext(), AnyFunctionRef(D));  
-    }
-    return Context(D->hasThrows(), D->isAsyncContext(), AnyFunctionRef(D));
+    return Context(D->getDeclContext(), D->hasThrows(), D->isAsyncContext(), AnyFunctionRef(D));
   }
 
   static Context forDeferBody() {
@@ -1130,7 +1182,7 @@ public:
     return Context(Kind::EnumElementInitializer);
   }
 
-  static Context forClosure(AbstractClosureExpr *E) {
+  static Context forClosure(DeclContext *DC, AbstractClosureExpr *E) {
     // Determine whether the closure has throwing function type.
     bool closureTypeThrows = true;
     bool closureTypeIsAsync = true;
@@ -1141,7 +1193,7 @@ public:
       }
     }
 
-    return Context(closureTypeThrows, closureTypeIsAsync, AnyFunctionRef(E));
+    return Context(DC, closureTypeThrows, closureTypeIsAsync, AnyFunctionRef(E));
   }
 
   static Context forCatchPattern(CaseStmt *S) {
@@ -1176,6 +1228,11 @@ public:
   bool handlesNothing() const {
     return !HandlesErrors;
   }
+
+  bool handlesErrors() const {
+    return HandlesErrors;
+  }
+
   bool handles(ThrowingKind errorKind) const {
     switch (errorKind) {
     case ThrowingKind::None:
@@ -1188,7 +1245,13 @@ public:
     // An operation that always throws can only be handled by an
     // all-handling context.
     case ThrowingKind::Throws:
-      return HandlesErrors && !isRethrowsByParameter();
+      if (!HandlesErrors) {
+        return false;
+      } else if (isRethrows()) {
+        return !isRethrowingByArgument();
+      } else {
+        return true;
+      }
     }
     llvm_unreachable("bad error kind");
   }
@@ -1198,10 +1261,14 @@ public:
   }
 
   DeclContext *getRethrowsDC() const {
-    if (!isRethrowsByParameter())
+    if (!isRethrows())
       return nullptr;
 
     return Function->getAbstractFunctionDecl();
+  }
+
+  DeclContext *getContext() const {
+    return DC;
   }
 
   InterpolatedStringLiteralExpr * getInterpolatedString() const {
@@ -1233,7 +1300,6 @@ public:
     case PotentialThrowReason::Kind::Throw:
       llvm_unreachable("should already have been covered");
     case PotentialThrowReason::Kind::CallThrows:
-    case PotentialThrowReason::Kind::CallRethrows:
     case PotentialThrowReason::Kind::AsyncLetThrows:
       // Already fully diagnosed.
       return;
@@ -1314,7 +1380,7 @@ public:
     // Allow the diagnostic to fire on the 'try' if we don't have
     // anything else to say.
     if (isTryCovered && !reason.isRethrowsCall() &&
-        !isRethrowsByParameter() && !isAutoClosure()) {
+        !isRethrows() && !isAutoClosure()) {
       DiagnoseErrorOnTry = true;
       return;
     }
@@ -1348,7 +1414,7 @@ public:
         return;
       }
 
-      if (isRethrowsByParameter()) {
+      if (isRethrows()) {
         diagnoseThrowInLegalContext(Diags, E, isTryCovered, reason,
                                     diag::throw_in_rethrows_function,
                                     diag::throwing_call_in_rethrows_function,
@@ -1527,6 +1593,7 @@ class CheckEffectsCoverage : public EffectsHandlingWalker<CheckEffectsCoverage> 
   ASTContext &Ctx;
 
   DeclContext *RethrowsDC = nullptr;
+  DeclContext *DC = nullptr;
   Context CurContext;
 
   class ContextFlags {
@@ -1736,6 +1803,7 @@ public:
     if (auto rethrowsDC = initialContext.getRethrowsDC()) {
       RethrowsDC = rethrowsDC;
     }
+    DC = initialContext.getContext();
   }
 
   /// Mark that the current context is top-level code with
@@ -1756,7 +1824,7 @@ public:
 
 private:
   ShouldRecurse_t checkClosure(ClosureExpr *E) {
-    ContextScope scope(*this, Context::forClosure(E));
+    ContextScope scope(*this, Context::forClosure(DC, E));
     scope.enterSubFunction();
     scope.resetCoverage();
     E->getBody()->walk(*this);
@@ -1764,7 +1832,7 @@ private:
   }
 
   ShouldRecurse_t checkAutoClosure(AutoClosureExpr *E) {
-    ContextScope scope(*this, Context::forClosure(E));
+    ContextScope scope(*this, Context::forClosure(DC, E));
     scope.enterSubFunction();
 
     bool shouldPreserveCoverage = true;
@@ -1852,7 +1920,7 @@ private:
 
     auto savedContext = CurContext;
     if (doThrowingKind != ThrowingKind::Throws &&
-        CurContext.isRethrowsByParameter()) {
+        CurContext.isRethrows()) {
       // If this catch clause is reachable at all, it's because a function
       // parameter throws. So let's temporarily state that the body is allowed
       // to throw.
@@ -1870,6 +1938,7 @@ private:
     // But if the expression didn't type-check, suppress diagnostics.
     ApplyClassifier classifier;
     classifier.RethrowsDC = RethrowsDC;
+    classifier.DC = DC;
     auto classification = classifier.classifyApply(E);
 
     checkThrowAsyncSite(E, /*requiresTry*/ true, classification);
@@ -2027,7 +2096,7 @@ private:
       if (!CurContext.handles(classification.getResult())) {
         CurContext.diagnoseUnhandledThrowSite(Ctx.Diags, E, isTryCovered,
                                               classification.getThrowsReason());
-      } else if (!isTryCovered && classification.isRethrowing()) {
+      } else if (!isTryCovered) {
         CurContext.diagnoseUncoveredThrowSite(Ctx, E,
                                               classification.getThrowsReason());
       }

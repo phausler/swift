@@ -2134,61 +2134,35 @@ void AttributeChecker::visitRequiredAttr(RequiredAttr *attr) {
   }
 }
 
-// static bool isSourceOfRethrowing(NominalTypeDecl *Nominal) {
-//   printf("checking to see if %s is a source of throwing\n", Nominal->getNameStr().data());
-  
-//   for (auto member : Nominal->getSemanticMembers()) {
-//     if (auto fn = dyn_cast<AbstractFunctionDecl>(member)) {
-//       if (fn->hasRethrows() && !fn->hasThrowingParameter()) {
-//         return true;
-//       }
-//     }
-//   }
-//   for (auto proto : Nominal->getLocalProtocols()) {
-//     if (isSourceOfRethrowing(proto)) {
-//       return true;
-//     }
-//   }
-//   return false;
-// }
-
-// static bool isSourceOfRethrowing(Type Ty) {
-//   if (auto nominal = Ty->getNominalOrBoundGenericNominal()) {
-//     return isSourceOfRethrowing(nominal);
-//   }
-//   return false;
-// }
-
 void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
-  // rethrowing must be determined after we have an expression
-  return;
-  // // 'rethrows' applies to functions that take throwing functions
-  // // as parameters.
-  // auto fn = cast<AbstractFunctionDecl>(D);
-  // if (fn->hasThrowingParameter()) {
-  //   return;
-  // }
+  // 'rethrows' applies to functions that take throwing functions
+  // as parameters.
+  auto fn = cast<AbstractFunctionDecl>(D);
+  if (fn->hasThrowingParameter()) {
+    return;
+  }
 
-  // auto DC = fn->getDeclContext();
-  // // or protocol requirements
-  // if (isa<ProtocolDecl>(DC) && fn->isProtocolRequirement()) {
-  //   return;
-  // }
+  auto DC = fn->getDeclContext();
+  // or protocol requirements
+  if (isa<ProtocolDecl>(DC) && fn->isProtocolRequirement()) {
+    return;
+  }
+  
+  auto signature = fn->getGenericSignature();
+  for (auto param : signature->getGenericParams()) {
+    auto GTPD = param->getDecl();
+    if (!GTPD)
+      continue;
+    for (auto proto : GTPD->getConformingProtocols()) {
+      if (proto->isSourceOfRethrows()) {
+        return;
+      }
+    }
+  }
 
-  // // or a function with generic requirements that has a source of rethrowing
-  // for (auto requirement : fn->getGenericRequirements()) {
-  //   if (isSourceOfRethrowing(requirement.getFirstType())) {
-  //     return;
-  //   }
-  //   if (requirement.getKind() != RequirementKind::Layout) {
-  //     if (isSourceOfRethrowing(requirement.getSecondType())) {
-  //       return;
-  //     }
-  //   }
-  // }
 
-  // diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);
-  // attr->setInvalid();
+  diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);
+  attr->setInvalid();
 }
 
 /// Collect all used generic parameter types from a given type.
