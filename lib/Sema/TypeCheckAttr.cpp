@@ -40,6 +40,7 @@
 #include "clang/Basic/CharInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Debug.h"
+#include "swift/AST/ProtocolConformance.h"
 
 using namespace swift;
 
@@ -2134,6 +2135,23 @@ void AttributeChecker::visitRequiredAttr(RequiredAttr *attr) {
   }
 }
 
+static bool paramIsSourceOfRethrows(ParamDecl *param) {
+  auto nominal = param->getType()
+                      ->lookThroughAllOptionalTypes()
+                      ->getWithoutParens()
+                      ->getInOutObjectType()
+                      ->getNominalOrBoundGenericNominal();
+  if (nominal) {
+    for (auto conformance : nominal->getAllConformances()) {
+      auto proto = conformance->getProtocol();
+      if (proto->isSourceOfRethrows()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
   // 'rethrows' applies to functions that take throwing functions
   // as parameters.
@@ -2148,19 +2166,20 @@ void AttributeChecker::visitRethrowsAttr(RethrowsAttr *attr) {
     return;
   }
   
-  auto signature = fn->getGenericSignature();
-  for (auto param : signature->getGenericParams()) {
-    auto GTPD = param->getDecl();
-    if (!GTPD)
-      continue;
-    for (auto proto : GTPD->getConformingProtocols()) {
-      if (proto->isSourceOfRethrows()) {
+  if (auto params = fn->getParameters()) {
+    if (fn->hasImplicitSelfDecl()) {
+      auto param = fn->getImplicitSelfDecl();
+      if (paramIsSourceOfRethrows(param)) {
+        return;
+      }
+    }
+    for (auto param : *params) {
+      if (paramIsSourceOfRethrows(param)) {
         return;
       }
     }
   }
-
-
+  
   diagnose(attr->getLocation(), diag::rethrows_without_throwing_parameter);
   attr->setInvalid();
 }

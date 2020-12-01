@@ -5055,13 +5055,6 @@ bool ProtocolDecl::isSourceOfRethrows() {
       continue;
     return true;
   }
-  // or check for any associated types constrained to protocols that are a source
-  // of a rethrowing potential
-  for (auto associatedType : getAssociatedTypeMembers()) {
-    if (associatedType->isSourceOfRethrows()) {
-      return true;
-    }
-  }
 
   return false;
 }
