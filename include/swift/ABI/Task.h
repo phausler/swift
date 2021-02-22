@@ -538,6 +538,22 @@ public:
                   nullptr
           };
         }
+
+        static GroupPollResult get(OpaqueValue *value) {
+          return GroupPollResult{
+              /*status*/ GroupFragment::GroupPollStatus::Success,
+              /*storage*/ value,
+              nullptr
+          };
+        }
+
+        static GroupPollResult get(SwiftError *error) {
+          return GroupPollResult{
+              /*status*/ GroupFragment::GroupPollStatus::Error,
+              /*storage*/ reinterpret_cast<OpaqueValue *>(error),
+              nullptr
+          };
+        }
     };
 
     /// An item within the message queue of a channel.
@@ -559,6 +575,16 @@ public:
           assert(task == nullptr || task->isFuture());
           return ReadyQueueItem{
               reinterpret_cast<uintptr_t>(task) | static_cast<uintptr_t>(status)};
+        }
+
+        static ReadyQueueItem get(OpaqueValue *value) {
+          return ReadyQueueItem{
+              reinterpret_cast<uintptr_t>(value) | static_cast<uintptr_t>(ReadyStatus::Success)};
+        }
+
+        static ReadyQueueItem get(SwiftError *error) {
+          return ReadyQueueItem{
+              reinterpret_cast<uintptr_t>(error) | static_cast<uintptr_t>(ReadyStatus::Error)};
         }
     };
 
@@ -775,7 +801,21 @@ public:
   /// The value is enqueued at the end of the channel.
   void groupOffer(AsyncTask *completed, AsyncContext *context, ExecutorRef executor);
 
-  void yieldOffer(OpaqueValue *result, void *continuation, const Metadata *resumeType);
+  struct Yield {
+    union {
+      OpaqueValue *value;
+      SwiftError *error;
+    } result;
+    bool isError;
+    explicit Yield(OpaqueValue *value) : isError(false) { 
+      result.value = value;
+    }
+    explicit Yield(SwiftError *error) : isError(true) {
+      result.error = error;
+    }
+  };
+
+  void yieldOffer(Yield result, void *continuation, const Metadata *resumeType);
 
   /// Attempt to dequeue ready tasks and complete the waitingTask.
   ///

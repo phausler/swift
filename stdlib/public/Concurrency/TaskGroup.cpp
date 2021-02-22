@@ -151,12 +151,25 @@ void AsyncTask::groupOffer(AsyncTask *completedTask, AsyncContext *context,
   llvm_unreachable("groupOffer must successfully complete it's cas-loop enqueue!");
 }
 
-void AsyncTask::yieldOffer(OpaqueValue *result, void *continuation, const Metadata *resumeType) {
+void AsyncTask::yieldOffer(Yield result, void *continuation, const Metadata *resumeType) {
   auto fragment = groupFragment();
   fragment->mutex.lock();
   auto assumed = fragment->statusAddReadyTaskAcquire();
   if (assumed.waitingTasks() == 0) {
-    assert(false  && "Unimplemented!");
+    // ==== a) enqueue message -----------------------------------------------
+    //
+    // no-one was waiting (yet), so we have to instead enqueue to the message queue
+    // when a task polls during next() it will notice that we have a value ready
+    // for it, and will process it immediately without suspending.
+
+    ReadyQueueItem readyItem;
+    if (result.isError) {
+      readyItem = ReadyQueueItem::get(result.result.error);
+    } else {
+      readyItem = ReadyQueueItem::get(result.result.value);
+    }
+    fragment->readyQueue.enqueue(readyItem);
+    fragment->mutex.unlock(); // TODO: remove fragment lock, and use status for synchronization
     return;
   }
 
@@ -191,19 +204,15 @@ void AsyncTask::yieldOffer(OpaqueValue *result, void *continuation, const Metada
             auto task = reinterpret_cast<AsyncTask*>(continuation);
             auto context = reinterpret_cast<AsyncContext*>(task->ResumeContext);
 
-            auto pollRes = GroupPollResult{
-                /*status*/ GroupFragment::GroupPollStatus::Success,
-                /*storage*/ result,
-                /*task*/ task
-            };
-
-            fragment->mutex.unlock(); // TODO: remove fragment lock, and use status for synchronization
-            
-            struct OptionalResult { void *contents; };
-            if (((OptionalResult *)result)->contents != nullptr) {
-              fragment->statusAddPendingTaskRelaxed();
+            GroupPollResult pollRes;
+            if (result.isError) {
+              pollRes = GroupPollResult::get(result.result.error);
+            } else {
+              pollRes = GroupPollResult::get(result.result.value);
             }
 
+            fragment->mutex.unlock(); // TODO: remove fragment lock, and use status for synchronization
+            fragment->statusAddPendingTaskRelaxed();
             swift::runTaskWithGroupPollResult(waitingTask, context->ResumeParentExecutor, pollRes);
             return;
           } else {
@@ -380,7 +389,7 @@ void swift_task_generator_yield(
     /* +1 */ OpaqueValue *result,
     void *continuation,
     const Metadata *resumeType) {
-  waitingTask->yieldOffer(result, continuation, resumeType);
+  waitingTask->yieldOffer(AsyncTask::Yield(result), continuation, resumeType);
 }
 
 SWIFT_CC(swift)
@@ -389,6 +398,6 @@ void swift_task_generator_resume_throwing(
     /* +1 */ SwiftError *error,
     void *continuation,
     const Metadata *resumeType) {
-  
+  waitingTask->yieldOffer(AsyncTask::Yield(error), continuation, resumeType);
 }
 }
