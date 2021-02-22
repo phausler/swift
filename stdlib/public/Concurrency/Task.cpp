@@ -280,7 +280,7 @@ AsyncTaskAndContext swift::swift_task_create_future_f(
   taskLocalsFragment->initializeLinkParent(task, parent);
 
   // Initialize the task group fragment if applicable.
-    if (flags.task_isTaskGroup()) {
+  if (flags.task_isTaskGroup()) {
     auto groupFragment = task->groupFragment();
     new (groupFragment) GroupFragment();
   }

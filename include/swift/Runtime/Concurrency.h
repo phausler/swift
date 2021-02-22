@@ -422,6 +422,27 @@ void swift_continuation_logFailedCheck(const char *message);
 /// Otherwise it uses dispatchMain.
 SWIFT_EXPORT_FROM(swift_Concurrency) SWIFT_CC(swift)
 void swift_task_asyncMainDrainQueue();
+
+/// Task generator runtime
+extern "C" SWIFT_EXPORT_FROM(swift_Concurrency) SWIFT_CC(swiftasync)
+void swift_task_generator_next(
+    AsyncTask *waitingTask,
+    ExecutorRef executor,
+    SWIFT_ASYNC_CONTEXT AsyncContext *rawContext);
+
+extern "C" SWIFT_EXPORT_FROM(swift_Concurrency) SWIFT_CC(swift)
+void swift_task_generator_yield(
+    AsyncTask *waitingTask,
+    /* +1 */ OpaqueValue *result,
+    void *continuation,
+    const Metadata *resumeType);
+
+extern "C" SWIFT_EXPORT_FROM(swift_Concurrency) SWIFT_CC(swift)
+void swift_task_generator_resume_throwing(
+    AsyncTask *waitingTask,
+    /* +1 */ SwiftError *error,
+    void *continuation,
+    const Metadata *resumeType);
 }
 
 #endif

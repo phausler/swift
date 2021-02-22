@@ -69,7 +69,8 @@ public:
 
   Job(JobFlags flags, TaskContinuationFunction *invoke)
       : Flags(flags), ResumeTask(invoke) {
-    assert(isAsyncTask() && "wrong constructor for a non-task job");
+    assert((isAsyncTask()) 
+      && "wrong constructor for a non-task job");
   }
 
   bool isAsyncTask() const {
@@ -753,6 +754,7 @@ public:
   };
 
   bool isTaskGroup() const { return Flags.task_isTaskGroup(); }
+  bool isTaskGenerator() const { return Flags.task_isTaskGenerator(); }
 
   GroupFragment *groupFragment() {
     assert(isTaskGroup());
@@ -772,6 +774,8 @@ public:
   /// Offer result of a task into this channel.
   /// The value is enqueued at the end of the channel.
   void groupOffer(AsyncTask *completed, AsyncContext *context, ExecutorRef executor);
+
+  void yieldOffer(OpaqueValue *result, void *continuation, const Metadata *resumeType);
 
   /// Attempt to dequeue ready tasks and complete the waitingTask.
   ///

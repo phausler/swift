@@ -264,6 +264,7 @@ extension Task {
     /// Kinds of schedulable jobs.
     enum Kind: Int {
       case task = 0
+      case generator = 1
     };
 
     /// The actual bit representation of these flags.
@@ -350,6 +351,20 @@ extension Task {
           bits = bits | 1 << 27
         } else {
           bits = (bits & ~(1 << 27))
+        }
+      }
+    }
+
+    var isTaskGenerator: Bool {
+      get {
+        (bits & (1 << 28)) != 0
+      }
+
+      set {
+        if newValue {
+          bits = bits | 1 << 28
+        } else {
+          bits = (bits & ~(1 << 28))
         }
       }
     }
