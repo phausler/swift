@@ -269,9 +269,9 @@ public:
 
     private:
       explicit TaskLocalItem(const Metadata *keyType, const Metadata *valueType)
-          : keyType(keyType),
-            valueType(valueType),
-            next(0) { }
+          : next(0),
+            keyType(keyType),
+            valueType(valueType) { }
 
     public:
       /// TaskLocalItem which does not by itself store any value, but only points
@@ -571,6 +571,14 @@ public:
           return reinterpret_cast<AsyncTask *>(storage & ~statusMask);
         }
 
+        OpaqueValue *getOpaqueValue() const {
+          return reinterpret_cast<OpaqueValue *>(storage & ~statusMask); 
+        }
+
+        SwiftError *getError() const {
+          return reinterpret_cast<SwiftError *>(storage & ~statusMask); 
+        }
+
         static ReadyQueueItem get(ReadyStatus status, AsyncTask *task) {
           assert(task == nullptr || task->isFuture());
           return ReadyQueueItem{
@@ -743,7 +751,7 @@ public:
     GroupStatus statusAddReadyTaskAcquire() {
       auto old = status.fetch_add(GroupStatus::oneReadyTask, std::memory_order_acquire);
       auto s = GroupStatus {old + GroupStatus::oneReadyTask };
-      assert(s.readyTasks() <= s.pendingTasks());
+      // assert(s.readyTasks() <= s.pendingTasks());
       return s;
     }
 

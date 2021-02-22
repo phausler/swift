@@ -17,13 +17,13 @@ import Swift
 @_silgen_name("swift_task_generator_yield")
 internal func _taskGeneratorResume<T>(
   _ task: Builtin.NativeObject,
-  yielding value: __owned T?
+  yielding value: T?
 )
 
 @_silgen_name("swift_task_generator_resume_throwing")
 internal func _taskGeneratorResume<T>(
   _ task: Builtin.NativeObject,
-  throwing: __owned Error, 
+  throwing: Error, 
   _ type: T.Type
 )
 
@@ -66,10 +66,12 @@ extension Task {
 
       public func resume(yielding value: T?) {
       	_taskGeneratorResume(task, yielding: value)
+        _fixLifetime(value)
       }
 
       public func resume(throwing error: Error) {
       	_taskGeneratorResume(task, throwing: error, T.self)
+        _fixLifetime(error)
       }
     }
   }

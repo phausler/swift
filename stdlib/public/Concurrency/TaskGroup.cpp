@@ -320,9 +320,6 @@ GroupFragment::GroupPollResult AsyncTask::groupPoll(AsyncTask *waitingTask) {
         return result;
       }
 
-      assert(item.getTask()->isFuture());
-      auto futureFragment = item.getTask()->futureFragment();
-
       // Store the task in the result, so after we're done processing it it may
       // be swift_release'd; we kept it alive while it was in the readyQueue by
       // an additional retain issued as we enqueued it there.
@@ -332,7 +329,13 @@ GroupFragment::GroupPollResult AsyncTask::groupPoll(AsyncTask *waitingTask) {
         case ReadyStatus::Success:
           // Immediately return the polled value
           result.status = GroupFragment::GroupPollStatus::Success;
-          result.storage = futureFragment->getStoragePtr();
+          if (isTaskGenerator()) {
+            result.storage = item.getOpaqueValue();
+          } else {
+            assert(item.getTask()->isFuture());
+            auto futureFragment = item.getTask()->futureFragment();
+            result.storage = futureFragment->getStoragePtr();
+          }
           assert(result.retainedTask && "polled a task, it must be not null");
           fragment->mutex.unlock(); // TODO: remove fragment lock, and use status for synchronization
           return result;
@@ -340,8 +343,14 @@ GroupFragment::GroupPollResult AsyncTask::groupPoll(AsyncTask *waitingTask) {
         case ReadyStatus::Error:
           // Immediately return the polled value
           result.status = GroupFragment::GroupPollStatus::Error;
-          result.storage =
-              reinterpret_cast<OpaqueValue *>(futureFragment->getError());
+          if (isTaskGenerator()) {
+            result.storage = reinterpret_cast<OpaqueValue *>(item.getError());
+          } else {
+            assert(item.getTask()->isFuture());
+            auto futureFragment = item.getTask()->futureFragment();
+            result.storage =
+                reinterpret_cast<OpaqueValue *>(futureFragment->getError());
+          }
           assert(result.retainedTask && "polled a task, it must be not null");
           fragment->mutex.unlock(); // TODO: remove fragment lock, and use status for synchronization
           return result;
