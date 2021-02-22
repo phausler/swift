@@ -434,14 +434,12 @@ extern "C" SWIFT_EXPORT_FROM(swift_Concurrency) SWIFT_CC(swift)
 void swift_task_generator_yield(
     AsyncTask *waitingTask,
     /* +1 */ OpaqueValue *result,
-    void *continuation,
     const Metadata *resumeType);
 
 extern "C" SWIFT_EXPORT_FROM(swift_Concurrency) SWIFT_CC(swift)
 void swift_task_generator_resume_throwing(
     AsyncTask *waitingTask,
     /* +1 */ SwiftError *error,
-    void *continuation,
     const Metadata *resumeType);
 }
 

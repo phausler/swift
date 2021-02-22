@@ -815,7 +815,7 @@ public:
     }
   };
 
-  void yieldOffer(Yield result, void *continuation, const Metadata *resumeType);
+  void yieldOffer(Yield result);
 
   /// Attempt to dequeue ready tasks and complete the waitingTask.
   ///

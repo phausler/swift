@@ -151,7 +151,7 @@ void AsyncTask::groupOffer(AsyncTask *completedTask, AsyncContext *context,
   llvm_unreachable("groupOffer must successfully complete it's cas-loop enqueue!");
 }
 
-void AsyncTask::yieldOffer(Yield result, void *continuation, const Metadata *resumeType) {
+void AsyncTask::yieldOffer(Yield result) {
   auto fragment = groupFragment();
   fragment->mutex.lock();
   auto assumed = fragment->statusAddReadyTaskAcquire();
@@ -201,8 +201,6 @@ void AsyncTask::yieldOffer(Yield result, void *continuation, const Metadata *res
               /*success*/ std::memory_order_release,
               /*failure*/ std::memory_order_acquire)) {
             // Run the task.
-            auto task = reinterpret_cast<AsyncTask*>(continuation);
-            auto context = reinterpret_cast<AsyncContext*>(task->ResumeContext);
 
             GroupPollResult pollRes;
             if (result.isError) {
@@ -213,7 +211,7 @@ void AsyncTask::yieldOffer(Yield result, void *continuation, const Metadata *res
 
             fragment->mutex.unlock(); // TODO: remove fragment lock, and use status for synchronization
             fragment->statusAddPendingTaskRelaxed();
-            swift::runTaskWithGroupPollResult(waitingTask, context->ResumeParentExecutor, pollRes);
+            swift::runTaskWithGroupPollResult(waitingTask, ResumeContext->ResumeParentExecutor, pollRes);
             return;
           } else {
             waitingTask = waitHead.getTask();
@@ -387,17 +385,15 @@ SWIFT_CC(swift)
 void swift_task_generator_yield(
     AsyncTask *waitingTask,
     /* +1 */ OpaqueValue *result,
-    void *continuation,
     const Metadata *resumeType) {
-  waitingTask->yieldOffer(AsyncTask::Yield(result), continuation, resumeType);
+  waitingTask->yieldOffer(AsyncTask::Yield(result));
 }
 
 SWIFT_CC(swift)
 void swift_task_generator_resume_throwing(
     AsyncTask *waitingTask,
     /* +1 */ SwiftError *error,
-    void *continuation,
     const Metadata *resumeType) {
-  waitingTask->yieldOffer(AsyncTask::Yield(error), continuation, resumeType);
+  waitingTask->yieldOffer(AsyncTask::Yield(error));
 }
 }
