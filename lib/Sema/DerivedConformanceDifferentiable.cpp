@@ -315,8 +315,6 @@ static ValueDecl *deriveDifferentiable_method(
   DeclName declName(C, methodName, params);
   auto *const funcDecl = FuncDecl::createImplicit(
       C, StaticSpellingKind::None, declName, /*NameLoc=*/SourceLoc(),
-      /*Async=*/false,
-      /*Throws=*/false,
       /*GenericParams=*/nullptr, params, returnType, parentDC);
   funcDecl->setSynthesized();
   if (!nominal->getSelfClassDecl())

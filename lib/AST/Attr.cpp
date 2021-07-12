@@ -730,6 +730,7 @@ bool DeclAttribute::printImpl(ASTPrinter &Printer, const PrintOptions &Options,
   case DAK_RawDocComment:
   case DAK_ObjCBridged:
   case DAK_SynthesizedProtocol:
+  case DAK_Throws:
   case DAK_Rethrows:
   case DAK_Reasync:
   case DAK_Infix:
@@ -1235,6 +1236,8 @@ StringRef DeclAttribute::getAttrName() const {
     return "derivative";
   case DAK_Transpose:
     return "transpose";
+  case DAK_Throws:
+    return "throws";
   }
   llvm_unreachable("bad DeclAttrKind");
 }
@@ -1956,6 +1959,39 @@ Type ImplementsAttr::getProtocolType() const {
 
 TypeRepr *ImplementsAttr::getProtocolTypeRepr() const {
   return ProtocolType->getTypeRepr();
+}
+
+
+ThrowsAttr::ThrowsAttr(SourceLoc atLoc,
+                               TypeExpr *FailureType)
+    : DeclAttribute(DAK_Throws, atLoc, SourceRange(atLoc), /*Implicit=*/false),
+      FailureType(FailureType) {
+}
+
+
+ThrowsAttr *ThrowsAttr::create(ASTContext &Ctx, SourceLoc atLoc,
+                                       TypeExpr *FailureType) {
+  void *mem = Ctx.Allocate(sizeof(ThrowsAttr), alignof(ThrowsAttr));
+  return new (mem) ThrowsAttr(atLoc, FailureType);
+}
+
+void ThrowsAttr::setFailureType(Type ty) {
+  assert(ty);
+  FailureType->setType(MetatypeType::get(ty));
+}
+
+Type ThrowsAttr::getFailureType() const {
+  if (FailureType == nullptr) {
+    return Type();
+  }
+  return FailureType->getInstanceType();
+}
+
+TypeRepr *ThrowsAttr::getFailureTypeRepr() const {
+  if (FailureType == nullptr) {
+    return nullptr;
+  }
+  return FailureType->getTypeRepr();
 }
 
 CustomAttr::CustomAttr(SourceLoc atLoc, SourceRange range, TypeExpr *type,

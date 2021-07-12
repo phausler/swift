@@ -405,8 +405,6 @@ deriveEquatable_eq(
   DeclName name(C, generatedIdentifier, params);
   auto *const eqDecl = FuncDecl::createImplicit(
       C, StaticSpellingKind::KeywordStatic, name, /*NameLoc=*/SourceLoc(),
-      /*Async=*/false,
-      /*Throws=*/false,
       /*GenericParams=*/nullptr, params, boolTy, parentDC);
   eqDecl->setUserAccessible(false);
 
@@ -543,8 +541,6 @@ deriveHashable_hashInto(
   DeclName name(C, C.Id_hash, params);
   auto *const hashDecl = FuncDecl::createImplicit(
       C, StaticSpellingKind::None, name, /*NameLoc=*/SourceLoc(),
-      /*Async=*/false,
-      /*Throws=*/false,
       /*GenericParams=*/nullptr, params, returnType, parentDC);
   hashDecl->setBodySynthesizer(bodySynthesizer);
 
@@ -891,8 +887,6 @@ static ValueDecl *deriveHashable_hashValue(DerivedConformance &derived) {
       /*FuncLoc=*/SourceLoc(), /*AccessorKeywordLoc=*/SourceLoc(),
       AccessorKind::Get, hashValueDecl,
       /*StaticLoc=*/SourceLoc(), StaticSpellingKind::None,
-      /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-      /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(),
       /*GenericParams=*/nullptr, params,
       intType, parentDC);
   getterDecl->setImplicit();

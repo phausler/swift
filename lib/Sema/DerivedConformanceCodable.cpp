@@ -1191,11 +1191,11 @@ static FuncDecl *deriveEncodable_encode(DerivedConformance &derived) {
   DeclName name(C, C.Id_encode, params);
   auto *const encodeDecl = FuncDecl::createImplicit(
       C, StaticSpellingKind::None, name, /*NameLoc=*/SourceLoc(),
-      /*Async=*/false,
-      /*Throws=*/true, /*GenericParams=*/nullptr, params, returnType,
+      /*GenericParams=*/nullptr, params, returnType,
       conformanceDC);
   encodeDecl->setSynthesized();
-
+  encodeDecl->getAttrs().add(new (C) ThrowsAttr(SourceLoc(), /*ThrowsType*/ nullptr));
+  
   if (dyn_cast<EnumDecl>(derived.Nominal)) {
     encodeDecl->setBodySynthesizer(deriveBodyEncodable_enum_encode);
   } else {
@@ -1783,9 +1783,10 @@ static ValueDecl *deriveDecodable_init(DerivedConformance &derived) {
   auto *initDecl =
       new (C) ConstructorDecl(name, SourceLoc(),
                               /*Failable=*/false,SourceLoc(),
-                              /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-                              /*Throws=*/true, SourceLoc(), paramList,
+                              paramList,
                               /*GenericParams=*/nullptr, conformanceDC);
+  initDecl->getAttrs().add(new (C) ThrowsAttr(SourceLoc(), /*ThrowsType*/ nullptr));
+                              
   initDecl->setImplicit();
   initDecl->setSynthesized();
 

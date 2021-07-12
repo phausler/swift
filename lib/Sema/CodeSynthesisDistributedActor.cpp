@@ -214,8 +214,6 @@ createDistributedActor_init_local(ClassDecl *classDecl,
   auto *initDecl =
       new (C) ConstructorDecl(name, SourceLoc(),
                               /*Failable=*/false, SourceLoc(),
-                              /*Async=*/false, SourceLoc(),
-                              /*Throws=*/false, SourceLoc(),
                               paramList,
                               /*GenericParams=*/nullptr, conformanceDC);
   initDecl->setImplicit();
@@ -336,8 +334,6 @@ createDistributedActor_init_resolve(ClassDecl *classDecl,
   auto *initDecl =
       new (C) ConstructorDecl(name, SourceLoc(),
                               /*Failable=*/false, SourceLoc(),
-                              /*Async=*/false, SourceLoc(),
-                              /*Throws=*/true, SourceLoc(),
                               paramList,
                               /*GenericParams=*/nullptr, conformanceDC);
   initDecl->setImplicit();
@@ -735,9 +731,12 @@ static void addImplicitRemoteActorFunction(ClassDecl *decl, FuncDecl *func) {
   DeclName name(C, remoteFuncIdent, params);
   auto *const remoteFuncDecl = FuncDecl::createImplicit(
       C, StaticSpellingKind::None, name, /*NameLoc=*/SourceLoc(),
-      /*Async=*/true, /*Throws=*/true,
       /*GenericParams=*/genericParams, params,
       resultTy, parentDC);
+  remoteFuncDecl->getAttrs().add(
+      new (C) AsyncAttr(SourceLoc()));
+  remoteFuncDecl->getAttrs().add(
+      new (C) ThrowsAttr(SourceLoc(), /*ThrowsType*/ nullptr));
 
   // *dynamic* because we'll be replacing it with specific transports
   remoteFuncDecl->getAttrs().add(

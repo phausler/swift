@@ -2888,12 +2888,13 @@ public:
 
     auto ctor = MF.createDecl<ConstructorDecl>(name, SourceLoc(), isFailable,
                                                /*FailabilityLoc=*/SourceLoc(),
-                                               /*Async=*/async,
-                                               /*AsyncLoc=*/SourceLoc(),
-                                               /*Throws=*/throws,
-                                               /*ThrowsLoc=*/SourceLoc(),
                                                /*BodyParams=*/nullptr,
                                                genericParams, parent);
+    if (async)
+      ctor->getAttrs().add(new (ctx) AsyncAttr(SourceLoc()));
+    if (throws)
+      ctor->getAttrs().add(new (ctx) ThrowsAttr(SourceLoc(), /*ThrowsType*/ nullptr));
+
     declOrOffset = ctor;
 
     ctor->setGenericSignature(MF.getGenericSignature(genericSigID));
@@ -3351,16 +3352,22 @@ public:
     FuncDecl *fn;
     if (!isAccessor) {
       fn = FuncDecl::createDeserialized(ctx, staticSpelling.getValue(), name,
-                                        async, throws, genericParams,
+                                        genericParams,
                                         resultType, DC);
     } else {
       auto *accessor = AccessorDecl::createDeserialized(
           ctx, accessorKind, storage, staticSpelling.getValue(),
-          async, throws, genericParams, resultType, DC);
+          genericParams, resultType, DC);
       accessor->setIsTransparent(isTransparent);
 
       fn = accessor;
     }
+
+    if (async)
+      fn->getAttrs().add(new (ctx) AsyncAttr(/*AsyncLoc*/ SourceLoc()));
+    if (throws)
+      fn->getAttrs().add(new (ctx) ThrowsAttr(/*ThrowsLoc*/ SourceLoc(), /*ThrowsType*/ nullptr));
+        
     declOrOffset = fn;
 
     fn->setGenericSignature(MF.getGenericSignature(genericSigID));

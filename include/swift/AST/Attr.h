@@ -2032,6 +2032,25 @@ public:
   }
 };
 
+
+class ThrowsAttr : public DeclAttribute {
+  TypeExpr *FailureType;
+
+public:
+  ThrowsAttr(SourceLoc atLoc, TypeExpr *FailureType);
+
+  static ThrowsAttr *create(ASTContext &Ctx, SourceLoc atLoc,
+                                TypeExpr *FailureType);
+
+  void setFailureType(Type ty);
+  Type getFailureType() const;
+  TypeRepr *getFailureTypeRepr() const;
+
+  static bool classof(const DeclAttribute *DA) {
+    return DA->getKind() == DAK_Throws;
+  }
+};
+
 /// Attributes that may be applied to declarations.
 class DeclAttributes {
   /// Linked list of declaration attributes.

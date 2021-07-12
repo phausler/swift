@@ -942,8 +942,6 @@ ParserResult<Stmt> Parser::parseStmtDefer() {
   DeclName name(Context, Context.getIdentifier("$defer"), params);
   auto *const tempDecl = FuncDecl::createImplicit(
       Context, StaticSpellingKind::None, name, /*NameLoc=*/PreviousLoc,
-      /*Async=*/false,
-      /*Throws=*/false,
       /*GenericParams*/ nullptr, params, TupleType::getEmpty(Context),
       CurDeclContext);
   setLocalDiscriminator(tempDecl);

@@ -1197,6 +1197,7 @@ public:
   ParserStatus parseGetEffectSpecifier(ParsedAccessors &accessors,
                                        SourceLoc &asyncLoc,
                                        SourceLoc &throwsLoc,
+                                       TypeRepr *&throwsType,
                                        bool &hasEffectfulGet,
                                        AccessorKind currentKind,
                                        SourceLoc const& currentLoc);
@@ -1452,6 +1453,7 @@ public:
                                       SourceLoc &asyncLoc,
                                       bool &reasync,
                                       SourceLoc &throws,
+                                      TypeRepr *&throwsType,
                                       bool &rethrows,
                                       TypeRepr *&retType);
 
@@ -1469,7 +1471,8 @@ public:
   /// lieu of 'throws'.
   ParserStatus parseEffectsSpecifiers(SourceLoc existingArrowLoc,
                                       SourceLoc &asyncLoc, bool *reasync,
-                                      SourceLoc &throwsLoc, bool *rethrows);
+                                      SourceLoc &throwsLoc, TypeRepr *&throwsType, 
+                                      bool *rethrows);
 
   /// Returns 'true' if \p T is considered effects specifier.
   bool isEffectsSpecifier(const Token &T);
@@ -1689,7 +1692,7 @@ public:
           VarDecl *&capturedSelfParamDecl,
           ParameterList *&params,
           SourceLoc &asyncLoc,
-          SourceLoc &throwsLoc,
+          SourceLoc &throwsLoc, TypeRepr *&throwsType,
           SourceLoc &arrowLoc,
           TypeExpr *&explicitResultType,
           SourceLoc &inLoc);

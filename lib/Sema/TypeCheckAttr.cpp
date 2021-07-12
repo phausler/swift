@@ -114,6 +114,7 @@ public:
   IGNORED_ATTR(ImplicitSelfCapture)
   IGNORED_ATTR(InheritActorContext)
   IGNORED_ATTR(Isolated)
+  IGNORED_ATTR(Throws)
 #undef IGNORED_ATTR
 
   void visitAlignmentAttr(AlignmentAttr *attr) {
@@ -2021,11 +2022,13 @@ SynthesizeMainFunctionRequest::evaluate(Evaluator &evaluator,
       DeclName(context, DeclBaseName(context.Id_MainEntryPoint),
                ParameterList::createEmpty(context)),
       /*NameLoc=*/SourceLoc(),
-      /*Async=*/false,
-      /*Throws=*/mainFunction->hasThrows(),
       /*GenericParams=*/nullptr, ParameterList::createEmpty(context),
       /*FnRetType=*/TupleType::getEmpty(context), declContext);
   func->setSynthesized(true);
+
+  if (mainFunction->hasThrows()) {
+    func->getAttrs().add(new (context) ThrowsAttr(SourceLoc(), /*ThrowsType*/ nullptr));
+  }
 
   auto *params = context.Allocate<MainTypeAttrParams>();
   params->mainFunction = mainFunction;

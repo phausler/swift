@@ -1853,6 +1853,7 @@ namespace decls_block {
   using SynthesizedProtocolDeclAttrLayout
     = BCRecordLayout<SynthesizedProtocol_DECL_ATTR>;
   using ImplementsDeclAttrLayout = BCRecordLayout<Implements_DECL_ATTR>;
+  using ThrowsDeclAttrLayout = BCRecordLayout<Throws_DECL_ATTR>;
   using ObjCRuntimeNameDeclAttrLayout
     = BCRecordLayout<ObjCRuntimeName_DECL_ATTR>;
   using RestatedObjCConformanceDeclAttrLayout

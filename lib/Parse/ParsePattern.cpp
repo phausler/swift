@@ -855,6 +855,7 @@ Parser::parseFunctionSignature(Identifier SimpleName,
                                SourceLoc &asyncLoc,
                                bool &reasync,
                                SourceLoc &throwsLoc,
+                               TypeRepr *&throwsType,
                                bool &rethrows,
                                TypeRepr *&retType) {
   SyntaxParsingContext SigContext(SyntaxContext, SyntaxKind::FunctionSignature);
@@ -870,9 +871,10 @@ Parser::parseFunctionSignature(Identifier SimpleName,
   // Check for the 'async' and 'throws' keywords.
   reasync = false;
   rethrows = false;
+  throwsType = nullptr;
   Status |= parseEffectsSpecifiers(SourceLoc(),
                                    asyncLoc, &reasync,
-                                   throwsLoc, &rethrows);
+                                   throwsLoc, throwsType, &rethrows);
 
   // If there's a trailing arrow, parse the rest as the result type.
   SourceLoc arrowLoc;
@@ -887,7 +889,9 @@ Parser::parseFunctionSignature(Identifier SimpleName,
 
     // Check for effect specifiers after the arrow, but before the return type,
     // and correct it.
-    parseEffectsSpecifiers(arrowLoc, asyncLoc, &reasync, throwsLoc, &rethrows);
+    parseEffectsSpecifiers(arrowLoc, 
+      asyncLoc, &reasync, 
+      throwsLoc, throwsType, &rethrows);
 
     ParserResult<TypeRepr> ResultType =
         parseDeclResultType(diag::expected_type_function_result);
@@ -897,7 +901,9 @@ Parser::parseFunctionSignature(Identifier SimpleName,
       return Status;
 
     // Check for effect specifiers after the type and correct it.
-    parseEffectsSpecifiers(arrowLoc, asyncLoc, &reasync, throwsLoc, &rethrows);
+    parseEffectsSpecifiers(arrowLoc, 
+      asyncLoc, &reasync, 
+      throwsLoc, throwsType, &rethrows);
   } else {
     // Otherwise, we leave retType null.
     retType = nullptr;
@@ -925,6 +931,7 @@ ParserStatus Parser::parseEffectsSpecifiers(SourceLoc existingArrowLoc,
                                             SourceLoc &asyncLoc,
                                             bool *reasync,
                                             SourceLoc &throwsLoc,
+                                            TypeRepr *&throwsType,
                                             bool *rethrows) {
   ParserStatus status;
 
@@ -998,7 +1005,28 @@ ParserStatus Parser::parseEffectsSpecifiers(SourceLoc existingArrowLoc,
           *rethrows = isRethrows;
         throwsLoc = Tok.getLoc();
       }
-      consumeToken();
+      if (Tok.is(tok::kw_throws)) {
+        consumeToken();
+        bool supportsTypedThrows = true; // for now
+        if (supportsTypedThrows) {
+          if (Tok.is(tok::l_paren)) {
+            consumeToken();
+            ParserResult<TypeRepr> Ty = parseDeclResultType(diag::expected_type);
+            if (Tok.is(tok::r_paren)) {
+              if (Ty.isNull()) {
+                diagnose(Tok, diag::throw_in_function_type)
+                  .fixItReplace(throwsLoc, "throws");
+              } else {
+                consumeToken();
+                throwsType = Ty.get();
+              }
+            }
+          }
+        }
+      } else {
+        consumeToken();
+      }
+      
       continue;
     }
 

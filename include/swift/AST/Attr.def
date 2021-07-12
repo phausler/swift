@@ -670,6 +670,12 @@ SIMPLE_DECL_ATTR(_assemblyVision, EmitAssemblyVisionRemarks,
   ABIStableToAdd | ABIStableToRemove | APIStableToAdd | APIStableToRemove,
   120)
 
+DECL_ATTR(throws, Throws,
+  OnFunc | OnConstructor |
+  RejectByParser | NotSerialized |
+  ABIBreakingToAdd | ABIBreakingToRemove | APIBreakingToAdd | APIBreakingToRemove,
+  121)
+
 // If you're adding a new underscored attribute here, please document it in
 // docs/ReferenceGuides/UnderscoredAttributes.md.
 
@@ -680,3 +686,4 @@ SIMPLE_DECL_ATTR(_assemblyVision, EmitAssemblyVisionRemarks,
 #undef CONTEXTUAL_SIMPLE_DECL_ATTR
 #undef DECL_ATTR
 #undef CONTEXTUAL_DECL_ATTR
+#undef EFFECT_ATTR
