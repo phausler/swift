@@ -144,8 +144,6 @@ static ConcreteDeclRef generateDeclRefForSpecializedCXXFunctionTemplate(
     auto newCtorDecl = ConstructorDecl::createImported(
         ctx, specialized, ctorName, oldDecl->getLoc(), 
         /*failable=*/false, /*failabilityLoc=*/SourceLoc(),
-        /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-        /*throws=*/false, /*throwsLoc=*/SourceLoc(), 
         newParamList, /*genericParams=*/nullptr,
         oldDecl->getDeclContext());
     return ConcreteDeclRef(newCtorDecl);
@@ -164,7 +162,7 @@ static ConcreteDeclRef generateDeclRefForSpecializedCXXFunctionTemplate(
 
   auto newFnDecl = FuncDecl::createImported(
       ctx, oldDecl->getLoc(), newName, oldDecl->getNameLoc(),
-      /*Async=*/false, oldDecl->hasThrows(), newParamList,
+      newParamList,
       newFnType->getResult(), /*GenericParams=*/nullptr,
       oldDecl->getDeclContext(), specialized);
   if (oldDecl->isStatic()) {
@@ -172,6 +170,10 @@ static ConcreteDeclRef generateDeclRefForSpecializedCXXFunctionTemplate(
     newFnDecl->setImportAsStaticMember();
   }
   newFnDecl->setSelfAccessKind(cast<FuncDecl>(oldDecl)->getSelfAccessKind());
+
+  if (oldDecl->hasThrows())
+    newFnDecl->getAttrs().add(new (ctx) ThrowsAttr(SourceLoc(), /*ThrowsType*/ nullptr));
+
   return ConcreteDeclRef(newFnDecl);
 }
 

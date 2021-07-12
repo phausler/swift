@@ -1551,6 +1551,8 @@ namespace  {
     UNINTERESTING_ATTR(ImplicitSelfCapture)
     UNINTERESTING_ATTR(InheritActorContext)
     UNINTERESTING_ATTR(Isolated)
+
+    UNINTERESTING_ATTR(Throws)
 #undef UNINTERESTING_ATTR
 
     void visitAvailableAttr(AvailableAttr *attr) {
