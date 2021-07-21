@@ -423,7 +423,7 @@ deriveRawRepresentable_init(DerivedConformance &derived) {
     new (C) ConstructorDecl(name, SourceLoc(),
                             /*Failable=*/ true, /*FailabilityLoc=*/SourceLoc(),
                             /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-                            /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(),
+                            /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(), /*ThrowsTyR=*/nullptr,
                             paramList,
                             /*GenericParams=*/nullptr, parentDC);
   

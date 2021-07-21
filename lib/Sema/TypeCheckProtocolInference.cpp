@@ -879,7 +879,7 @@ AssociatedTypeInference::computeDerivedTypeWitness(
   // Can we derive conformances for this protocol and adoptee?
   NominalTypeDecl *derivingTypeDecl = adoptee->getAnyNominal();
   if (!DerivedConformance::derivesProtocolConformance(dc, derivingTypeDecl,
-                                                      proto))
+                                                      proto)) 
     return std::make_pair(Type(), nullptr);
 
   // Try to derive the type witness.
@@ -1900,6 +1900,22 @@ bool AssociatedTypeInference::diagnoseAmbiguousSolutions(
   return false;
 }
 
+static bool associatedTypeInfersError(AssociatedTypeDecl *assocType, 
+                                      ASTContext &ctx) {
+  auto errorProto = ctx.getErrorDecl();
+  for (auto assocReq : assocType->getConformingProtocols()) {
+    if (assocReq == errorProto) {
+      return true;
+    }
+    for (auto inerhitedReq : assocReq->getInheritedProtocols()) {
+      if (inerhitedReq == errorProto) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 auto AssociatedTypeInference::solve(ConformanceChecker &checker)
     -> Optional<InferredTypeWitnesses> {
   // Track when we are checking type witnesses.
@@ -1928,6 +1944,59 @@ auto AssociatedTypeInference::solve(ConformanceChecker &checker)
       // We did not find the witness via name lookup. Try to derive
       // it below.
       break;
+    }
+
+    ASTContext &ctx = getASTContext();
+    if (associatedTypeInfersError(assocType, ctx)) {
+      llvm::SetVector<AbstractFunctionDecl *> typedThrowingFunctions;
+      for (auto member : proto->getMembers()) {
+        //   find an abstractFunctionDecl that is a member of this protocol that uses that type as it's throwsTypeR
+        if (auto fn = dyn_cast<AbstractFunctionDecl>(member)) {
+          if (!fn->hasThrows()) {
+            continue;
+          }
+
+          auto typeRepr = fn->getThrowsTypeRepr();
+          if (typeRepr == nullptr) {
+            continue;
+          }
+
+          // if the thrown type is the same name as this association then we found the one in question
+          if (auto identTypeRepr = dyn_cast<SimpleIdentTypeRepr>(typeRepr)) {
+            if (identTypeRepr->getNameRef().getFullName() == assocType->getName()) {
+              typedThrowingFunctions.insert(fn);
+            }
+          }
+          
+        }
+      }
+      
+      Type derivedThrownTy;
+      for (auto fn : typedThrowingFunctions) {
+        DeclNameRef defaultName = fn->createNameRef();
+        // lookup the default qualified adoption of this function to determine if it is 
+        SmallVector<ValueDecl *, 4> lookupResults;
+        dc->lookupQualified(adoptee->getAnyNominal(), defaultName, NL_QualifiedDefault, lookupResults);
+        // only allow for one match for the inference solver (is this right?)
+        if (lookupResults.size() == 1) {
+          if (auto adopterFn = dyn_cast<AbstractFunctionDecl>(lookupResults[0])) {
+            if (adopterFn->hasThrows() == false) {
+              // we know the inference is actually Never (because throws(Never) == no throwing)
+              derivedThrownTy = ctx.getNeverType();
+              break;
+            } else if (adopterFn->getThrowsTypeRepr() == nullptr) {
+              // we know the inference is actually Error (because throws inferred type is Error)
+              derivedThrownTy = ctx.getErrorDecl()->getDeclaredInterfaceType();
+              break;
+            }
+          }
+        }
+      }
+
+      if (derivedThrownTy) {
+        checker.recordTypeWitness(assocType, derivedThrownTy, nullptr);
+        continue;
+      }
     }
 
     // Finally, try to derive the witness if we know how.

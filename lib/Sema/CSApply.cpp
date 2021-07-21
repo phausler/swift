@@ -145,7 +145,7 @@ static ConcreteDeclRef generateDeclRefForSpecializedCXXFunctionTemplate(
         ctx, specialized, ctorName, oldDecl->getLoc(), 
         /*failable=*/false, /*failabilityLoc=*/SourceLoc(),
         /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-        /*throws=*/false, /*throwsLoc=*/SourceLoc(), 
+        /*throws=*/false, /*throwsLoc=*/SourceLoc(), /*throwsTyR=*/nullptr,
         newParamList, /*genericParams=*/nullptr,
         oldDecl->getDeclContext());
     return ConcreteDeclRef(newCtorDecl);

@@ -892,7 +892,7 @@ static ValueDecl *deriveHashable_hashValue(DerivedConformance &derived) {
       AccessorKind::Get, hashValueDecl,
       /*StaticLoc=*/SourceLoc(), StaticSpellingKind::None,
       /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-      /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(),
+      /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(), /*ThrowsTyR=*/nullptr,
       /*GenericParams=*/nullptr, params,
       intType, parentDC);
   getterDecl->setImplicit();

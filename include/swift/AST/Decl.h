@@ -5866,6 +5866,8 @@ protected:
   /// Location of the 'throws' token.
   SourceLoc ThrowsLoc;
 
+  TypeRepr *ThrowsTyR;
+
   struct {
     unsigned NeedsNewVTableEntryComputed : 1;
     unsigned NeedsNewVTableEntry : 1;
@@ -5873,12 +5875,13 @@ protected:
 
   AbstractFunctionDecl(DeclKind Kind, DeclContext *Parent, DeclName Name,
                        SourceLoc NameLoc, bool Async, SourceLoc AsyncLoc,
-                       bool Throws, SourceLoc ThrowsLoc,
+                       bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsTyR,
                        bool HasImplicitSelfDecl,
                        GenericParamList *GenericParams)
       : GenericContext(DeclContextKind::AbstractFunctionDecl, Parent, GenericParams),
         ValueDecl(Kind, Parent, Name, NameLoc),
-        Body(nullptr), AsyncLoc(AsyncLoc), ThrowsLoc(ThrowsLoc) {
+        Body(nullptr), AsyncLoc(AsyncLoc), ThrowsLoc(ThrowsLoc), 
+        ThrowsTyR(ThrowsTyR) {
     setBodyKind(BodyKind::None);
     Bits.AbstractFunctionDecl.HasImplicitSelfDecl = HasImplicitSelfDecl;
     Bits.AbstractFunctionDecl.Overridden = false;
@@ -5946,7 +5949,12 @@ public:
   SourceLoc getAsyncLoc() const { return AsyncLoc; }
 
   /// Retrieve the location of the 'throws' keyword, if present.
-  SourceLoc getThrowsLoc() const { return ThrowsLoc; }
+  SourceLoc getThrowsLoc() const {
+    // hasThrows can return false if there is a throwing type of Never
+    return hasThrows() ? ThrowsLoc : SourceLoc();
+  }
+
+  TypeRepr *getThrowsTypeRepr() const { return ThrowsTyR; }
 
   /// Returns true if the function is marked as `async`. The
   /// type of the function will be `async` as well.
@@ -5965,7 +5973,7 @@ public:
   }
 
   /// Returns true if the function body throws.
-  bool hasThrows() const { return Bits.AbstractFunctionDecl.Throws; }
+  bool hasThrows() const;
 
   /// Returns if the function throws or is async.
   bool hasEffect(EffectKind kind) const;
@@ -6276,13 +6284,13 @@ protected:
            SourceLoc FuncLoc,
            DeclName Name, SourceLoc NameLoc,
            bool Async, SourceLoc AsyncLoc,
-           bool Throws, SourceLoc ThrowsLoc,
+           bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsTyR,
            bool HasImplicitSelfDecl,
            GenericParamList *GenericParams, DeclContext *Parent)
     : AbstractFunctionDecl(Kind, Parent,
                            Name, NameLoc,
                            Async, AsyncLoc,
-                           Throws, ThrowsLoc,
+                           Throws, ThrowsLoc, ThrowsTyR,
                            HasImplicitSelfDecl, GenericParams),
       StaticLoc(StaticLoc), FuncLoc(FuncLoc) {
     assert(!Name.getBaseName().isSpecial());
@@ -6306,8 +6314,8 @@ private:
                               SourceLoc FuncLoc,
                               DeclName Name, SourceLoc NameLoc,
                               bool Async, SourceLoc AsyncLoc,
-                              bool Throws, SourceLoc ThrowsLoc,
-                              GenericParamList *GenericParams,
+                              bool Throws, SourceLoc ThrowsLoc, 
+                              TypeRepr *ThrowsTyR, GenericParamList *GenericParams,
                               DeclContext *Parent,
                               ClangNode ClangN);
 
@@ -6336,8 +6344,8 @@ public:
   static FuncDecl *create(ASTContext &Context, SourceLoc StaticLoc,
                           StaticSpellingKind StaticSpelling, SourceLoc FuncLoc,
                           DeclName Name, SourceLoc NameLoc, bool Async,
-                          SourceLoc AsyncLoc, bool Throws, SourceLoc ThrowsLoc,
-                          GenericParamList *GenericParams,
+                          SourceLoc AsyncLoc, bool Throws, SourceLoc ThrowsLoc, 
+                          TypeRepr *ThrowsTyR, GenericParamList *GenericParams,
                           ParameterList *BodyParams, TypeRepr *ResultTyR,
                           DeclContext *Parent);
 
@@ -6486,13 +6494,14 @@ class AccessorDecl final : public FuncDecl {
   AccessorDecl(SourceLoc declLoc, SourceLoc accessorKeywordLoc,
                AccessorKind accessorKind, AbstractStorageDecl *storage,
                SourceLoc staticLoc, StaticSpellingKind staticSpelling,
-               bool async, SourceLoc asyncLoc, bool throws, SourceLoc throwsLoc,
+               bool async, SourceLoc asyncLoc, 
+               bool throws, SourceLoc throwsLoc, TypeRepr *ThrowsTyR,
                bool hasImplicitSelfDecl, GenericParamList *genericParams,
                DeclContext *parent)
     : FuncDecl(DeclKind::Accessor,
                staticLoc, staticSpelling, /*func loc*/ declLoc,
                /*name*/ Identifier(), /*name loc*/ declLoc,
-               async, asyncLoc, throws, throwsLoc,
+               async, asyncLoc, throws, throwsLoc, ThrowsTyR,
                hasImplicitSelfDecl, genericParams, parent),
       AccessorKeywordLoc(accessorKeywordLoc),
       Storage(storage) {
@@ -6509,7 +6518,7 @@ class AccessorDecl final : public FuncDecl {
                                   SourceLoc staticLoc,
                                   StaticSpellingKind staticSpelling,
                                   bool async, SourceLoc asyncLoc,
-                                  bool throws, SourceLoc throwsLoc,
+                                  bool throws, SourceLoc throwsLoc, TypeRepr *ThrowsTyR,
                                   GenericParamList *genericParams,
                                   DeclContext *parent,
                                   ClangNode clangNode);
@@ -6538,7 +6547,7 @@ public:
                               SourceLoc staticLoc,
                               StaticSpellingKind staticSpelling,
                               bool async, SourceLoc asyncLoc,
-                              bool throws, SourceLoc throwsLoc,
+                              bool throws, SourceLoc throwsLoc, TypeRepr *ThrowsTyR,
                               GenericParamList *genericParams,
                               ParameterList *parameterList,
                               Type fnRetType, DeclContext *parent,
@@ -6882,7 +6891,7 @@ public:
   ConstructorDecl(DeclName Name, SourceLoc ConstructorLoc, 
                   bool Failable, SourceLoc FailabilityLoc,
                   bool Async, SourceLoc AsyncLoc,
-                  bool Throws, SourceLoc ThrowsLoc,
+                  bool Throws, SourceLoc ThrowsLoc, TypeRepr *ThrowsTyR,
                   ParameterList *BodyParams,
                   GenericParamList *GenericParams, 
                   DeclContext *Parent);
@@ -6892,7 +6901,7 @@ public:
                  SourceLoc constructorLoc, 
                  bool failable, SourceLoc failabilityLoc, 
                  bool async, SourceLoc asyncLoc,
-                 bool throws, SourceLoc throwsLoc,
+                 bool throws, SourceLoc throwsLoc, TypeRepr *ThrowsTyR,
                  ParameterList *bodyParams, GenericParamList *genericParams,
                  DeclContext *parent);
 

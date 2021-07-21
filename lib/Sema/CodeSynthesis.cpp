@@ -331,7 +331,7 @@ static ConstructorDecl *createImplicitConstructor(NominalTypeDecl *decl,
     new (ctx) ConstructorDecl(name, Loc,
                               /*Failable=*/false, /*FailabilityLoc=*/SourceLoc(),
                               /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-                              /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(),
+                              /*Throws=*/false, /*ThrowsLoc=*/SourceLoc(), /*throwsTyR=*/nullptr,
                               paramList, /*GenericParams=*/nullptr, decl);
 
   // Mark implicit.
@@ -790,14 +790,16 @@ createDesignatedInitOverride(ClassDecl *classDecl,
 
   // Create the initializer declaration, inheriting the name,
   // failability, and throws from the superclass initializer.
+
   auto ctor =
     new (ctx) ConstructorDecl(superclassCtor->getName(),
                               classDecl->getBraces().Start,
                               superclassCtor->isFailable(),
                               /*FailabilityLoc=*/SourceLoc(),
                               /*Async=*/false, /*AsyncLoc=*/SourceLoc(),
-                              /*Throws=*/superclassCtor->hasThrows(),
-                              /*ThrowsLoc=*/SourceLoc(),
+                              /*Throws=*/superclassCtor->hasThrows(), 
+                              /*ThrowsLoc=*/SourceLoc(), 
+                              superclassCtor->getThrowsTypeRepr(),
                               bodyParams, overrideInfo.GenericParams,
                               classDecl);
 

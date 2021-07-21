@@ -5606,7 +5606,8 @@ static AccessorDecl *createAccessorFunc(SourceLoc DeclLoc,
                                     AccessorKind Kind,
                                     AbstractStorageDecl *storage,
                                     Parser *P, SourceLoc AccessorKeywordLoc,
-                                    SourceLoc asyncLoc, SourceLoc throwsLoc) {
+                                    SourceLoc asyncLoc, SourceLoc throwsLoc, 
+                                    TypeRepr *throwsTyR) {
   // First task, set up the value argument list.  This is the "newValue" name
   // (for setters) followed by the index list (for subscripts).  For
   // non-subscript getters, this degenerates down to "()".
@@ -5668,7 +5669,7 @@ static AccessorDecl *createAccessorFunc(SourceLoc DeclLoc,
                                  Kind, storage,
                                  StaticLoc, StaticSpellingKind::None,
                                  asyncLoc.isValid(), asyncLoc,
-                                 throwsLoc.isValid(), throwsLoc,
+                                 throwsLoc.isValid(), throwsLoc, throwsTyR,
                                  (GenericParams
                                   ? GenericParams->clone(P->CurDeclContext)
                                   : nullptr),
@@ -5977,6 +5978,7 @@ static bool parseAccessorIntroducer(Parser &P,
 ParserStatus Parser::parseGetEffectSpecifier(ParsedAccessors &accessors,
                                              SourceLoc &asyncLoc,
                                              SourceLoc &throwsLoc,
+                                             TypeRepr *&throwsType,
                                              bool &hasEffectfulGet,
                                              AccessorKind currentKind,
                                              SourceLoc const& currentLoc) {
@@ -5987,7 +5989,8 @@ ParserStatus Parser::parseGetEffectSpecifier(ParsedAccessors &accessors,
       Status |=
           parseEffectsSpecifiers(/*existingArrowLoc*/ SourceLoc(), asyncLoc,
               /*reasync*/ nullptr, throwsLoc,
-              /*rethrows*/ nullptr);
+              /*rethrows*/ nullptr,
+              throwsType);
 
       // If we've previously parsed a non-'get' accessor, raise diagnostics,
       // because we're about to add an effectful 'get' accessor.
@@ -6067,7 +6070,8 @@ ParserStatus Parser::parseGetSet(ParseDeclOptions Flags,
                            GenericParams, Indices, StaticLoc, Flags,
                            AccessorKind::Get, storage, this,
                            /*AccessorKeywordLoc*/ SourceLoc(),
-                           /*asyncLoc*/SourceLoc(), /*throwsLoc*/SourceLoc());
+                           /*asyncLoc*/SourceLoc(), /*throwsLoc*/SourceLoc(),
+                           /*throwsTyR*/ nullptr);
     accessors.add(getter);
     parseAbstractFunctionBody(getter);
     accessors.RBLoc = getter->getEndLoc();
@@ -6162,14 +6166,15 @@ ParserStatus Parser::parseGetSet(ParseDeclOptions Flags,
     // on 'get' accessors, we also emit diagnostics if they show up on others.
     SourceLoc asyncLoc;
     SourceLoc throwsLoc;
-    Status |= parseGetEffectSpecifier(accessors, asyncLoc, throwsLoc,
+    TypeRepr *throwsTyR = nullptr;
+    Status |= parseGetEffectSpecifier(accessors, asyncLoc, throwsLoc, throwsTyR,
                                       hasEffectfulGet, Kind, Loc);
 
     // Set up a function declaration.
     auto accessor = createAccessorFunc(Loc, ValueNamePattern, GenericParams,
                                        Indices, StaticLoc, Flags,
                                        Kind, storage, this, Loc,
-                                       asyncLoc, throwsLoc);
+                                       asyncLoc, throwsLoc, throwsTyR);
     accessor->getAttrs() = Attributes;
 
     // Collect this accessor and detect conflicts.
@@ -6862,11 +6867,13 @@ ParserResult<FuncDecl> Parser::parseDeclFunc(SourceLoc StaticLoc,
   SourceLoc asyncLoc;
   bool reasync;
   SourceLoc throwsLoc;
+  TypeRepr *throwsTyR = nullptr;
   bool rethrows;
   Status |= parseFunctionSignature(SimpleName, FullName, BodyParams,
                                    DefaultArgs,
                                    asyncLoc, reasync,
                                    throwsLoc, rethrows,
+                                   throwsTyR,
                                    FuncRetTy);
   if (Status.hasCodeCompletion() && !CodeCompletion) {
     // Trigger delayed parsing, no need to continue.
@@ -6892,7 +6899,7 @@ ParserResult<FuncDecl> Parser::parseDeclFunc(SourceLoc StaticLoc,
   auto *FD = FuncDecl::create(Context, StaticLoc, StaticSpelling,
                               FuncLoc, FullName, NameLoc,
                               /*Async=*/asyncLoc.isValid(), asyncLoc,
-                              /*Throws=*/throwsLoc.isValid(), throwsLoc,
+                              /*Throws=*/throwsLoc.isValid(), throwsLoc, throwsTyR,
                               GenericParams,
                               BodyParams, FuncRetTy,
                               CurDeclContext);
@@ -7901,10 +7908,12 @@ Parser::parseDeclInit(ParseDeclOptions Flags, DeclAttributes &Attributes) {
   SourceLoc asyncLoc;
   bool reasync = false;
   SourceLoc throwsLoc;
+  TypeRepr *throwsTyR = nullptr;
   bool rethrows = false;
   Status |= parseEffectsSpecifiers(SourceLoc(),
                                    asyncLoc, &reasync,
-                                   throwsLoc, &rethrows);
+                                   throwsLoc, &rethrows,
+                                   throwsTyR);
   if (Status.hasCodeCompletion() && !CodeCompletion) {
     // Trigger delayed parsing, no need to continue.
     return Status;
@@ -7924,8 +7933,8 @@ Parser::parseDeclInit(ParseDeclOptions Flags, DeclAttributes &Attributes) {
                                            Failable, FailabilityLoc,
                                            asyncLoc.isValid(), asyncLoc,
                                            throwsLoc.isValid(), throwsLoc,
-                                           Params.get(), GenericParams,
-                                           CurDeclContext);
+                                           throwsTyR, Params.get(), 
+                                           GenericParams, CurDeclContext);
   CD->setImplicitlyUnwrappedOptional(IUO);
   CD->getAttrs() = Attributes;
 

@@ -502,11 +502,12 @@ class FunctionTypeRepr : public TypeRepr {
   TypeRepr *RetTy;
   SourceLoc AsyncLoc;
   SourceLoc ThrowsLoc;
+  TypeRepr *ThrowsTyR;
   SourceLoc ArrowLoc;
 
 public:
   FunctionTypeRepr(GenericParamList *genericParams, TupleTypeRepr *argsTy,
-                   SourceLoc asyncLoc, SourceLoc throwsLoc, SourceLoc arrowLoc,
+                   SourceLoc asyncLoc, SourceLoc throwsLoc, TypeRepr *throwsTyR, SourceLoc arrowLoc,
                    TypeRepr *retTy,
                    GenericParamList *patternGenericParams = nullptr,
                    ArrayRef<TypeRepr *> patternSubs = {},
@@ -517,7 +518,7 @@ public:
       PatternGenericParams(patternGenericParams), PatternGenericEnv(nullptr),
       PatternSubs(patternSubs),
       ArgsTy(argsTy), RetTy(retTy),
-      AsyncLoc(asyncLoc), ThrowsLoc(throwsLoc), ArrowLoc(arrowLoc) {
+      AsyncLoc(asyncLoc), ThrowsLoc(throwsLoc), ThrowsTyR(throwsTyR), ArrowLoc(arrowLoc) {
   }
 
   GenericParamList *getGenericParams() const { return GenericParams; }
