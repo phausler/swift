@@ -38,7 +38,8 @@
 // Thank you for your help ensuring the stdlib remains compatible with its past!
 //                                            -- Your friendly stdlib engineers
 
-// REQUIRES: swift_stdlib_asserts, array_cow_checks
+// REQUIRES: swift_stdlib_asserts
+// UNSUPPORTED: array_cow_checks
 
 // *** DO NOT DISABLE OR XFAIL THIS TEST. *** (See comment above.)
 

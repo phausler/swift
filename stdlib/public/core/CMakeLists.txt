@@ -215,7 +215,6 @@ set(SWIFTLIB_SOURCES
   CollectionDifference.swift
   CollectionOfOne.swift
   Diffing.swift
-  DoubleWide.swift
   Duration.swift
   DurationProtocol.swift
   FloatingPointRandom.swift
@@ -233,6 +232,7 @@ set(SWIFTLIB_SOURCES
 
 set(SWIFTLIB_GYB_SOURCES
   ${SWIFTLIB_ESSENTIAL_GYB_SOURCES}
+  Int128.swift.gyb
   SIMDConcreteOperations.swift.gyb
   SIMDVectorTypes.swift.gyb
   Tuple.swift.gyb
