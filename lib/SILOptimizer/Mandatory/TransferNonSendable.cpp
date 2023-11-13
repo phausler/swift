@@ -1393,7 +1393,7 @@ public:
     os << SEP_STR << "BlockPartitionState[reached=" << reached
        << ", needsUpdate=" << needsUpdate << "]\nid: ";
 #ifndef NDEBUG
-    basicBlock->printID(os);
+    basicBlock->print(os);
 #else
     os << "NOASSERTS. ";
 #endif
@@ -1409,12 +1409,12 @@ public:
     os << "└──────────╼\nSuccs:\n";
     for (auto succ : basicBlock->getSuccessorBlocks()) {
       os << "→";
-      succ->printID(os);
+      succ->print(os);
     }
     os << "Preds:\n";
     for (auto pred : basicBlock->getPredecessorBlocks()) {
       os << "←";
-      pred->printID(os);
+      pred->print(os);
     }
     os << SEP_STR;
   }

@@ -96,6 +96,10 @@
         },
         "zlib": {
           "remote": { "id": "madler/zlib" }
+        },
+        "picolibc": {
+            "remote": { "id": "picolibc/picolibc" },
+            "embedded": true
         }
     },
     "default-branch-scheme": "main",
@@ -145,7 +149,8 @@
                 "curl": "curl-8_4_0",
                 "icu": "maint/maint-69",
                 "libxml2": "v2.11.5",
-                "zlib": "v1.3"
+                "zlib": "v1.3",
+                "picolibc": "main"
             }
         },
         "release/5.10": {

@@ -403,7 +403,8 @@ def obtain_all_additional_swift_sources(args, config, with_ssh, scheme_name,
                 print("Skipping clone of '" + repo_name + "', directory "
                       "already exists")
                 continue
-
+            if 'embedded' in repo_info and not args.embedded:
+                continue
             # If we have a url override, use that url instead of
             # interpolating.
             remote_repo_info = repo_info['remote']
@@ -647,6 +648,12 @@ repositories.
         help="The root directory to checkout repositories",
         default=SWIFT_SOURCE_ROOT,
         dest='source_root')
+    parser.add_argument(
+        "--embedded",
+        help="""Check out associated projects for embedded targets.""",
+        default=False,
+        action='store_true'
+        )
     args = parser.parse_args()
 
     if not args.scheme:

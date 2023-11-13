@@ -1,0 +1,22 @@
+{
+  "rootPath" : "swift.xctoolchain/usr/bin/",
+  "swiftCompiler" : {
+    "extraCLIOptions" : [
+      "-enable-experimental-feature", "Embedded",
+      "-whole-module-optimization",
+      "-target", "%TARGET%",
+      "-use-ld=lld",
+      "-Xcc", "-flto",
+    ]
+  },
+  "cCompiler": {
+    "extraCLIOptions" : ["%C_FLAGS_ARRAY%"]
+  },
+  "linker": {
+    "extraCLIOptions": [
+      "--allow-multiple-definition",
+      "-T", "%LINKER_SCRIPT_NAME%"
+    ]
+  },
+  "schemaVersion" : "1.0",
+}

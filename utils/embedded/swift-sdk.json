@@ -1,0 +1,11 @@
+{
+  "schemaVersion" : "3.0",
+  "runTimeTriples" : {
+    "%TARGET%" : {
+      "toolsetPaths" : [
+        "toolset.json"
+      ],
+      "sdkRootPath" : "sdk"
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "RP2040": {
+    "compiler-rt": {
+      "cmake": {
+        "CMAKE_ASM_COMPILER_TARGET": "armv6m-none-none-eabi",
+        "CMAKE_ASM_FLAGS": "'-march=armv6-m -mcpu=cortex-m0plus -mthumb'",
+        "CMAKE_C_COMPILER_TARGET": "armv6-none-none-eabi", 
+        "CMAKE_C_FLAGS": "'-march=armv6-m -mcpu=cortex-m0plus -mthumb'",
+        "COMPILER_RT_BUILD_BUILTINS": "ON",
+        "COMPILER_RT_BAREMETAL_BUILD": "ON",
+        "COMPILER_RT_DEFAULT_TARGET_ONLY": "ON",
+        "CRT_SUPPORTED_ARCH": "armv6m",
+        "CMAKE_C_COMPILER_TARGET": "armv6m-none-eabi"
+      },
+      "product": "libclang_rt.builtins-armv6m.a",
+      "installed": "libclang_rt.builtins-armv6.a"
+    },
+    "picolibc": {
+      "meson": {
+        "config": "RP2040.config"
+      }
+    },
+    "build": {
+      "target": "armv6-none-none-eabi",
+      "arch": "armv6",
+      "cflags": [
+        "-march=armv6-m",
+        "-mcpu=cortex-m0plus",
+        "-mthumb",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-fno-exceptions",
+        "-fdeclspec",
+        "-fno-rtti",
+        "-D__RP2040__"
+      ],
+      "linker-script": "RP2040.ld"
+    }
+  },
+  "ESP32": {
+    "compiler-rt": {
+      "cmake": {
+        "CMAKE_ASM_COMPILER_TARGET": "riscv32-none-none-eabi",
+        "CMAKE_C_COMPILER_TARGET": "riscv32-none-none-eabi",
+        "COMPILER_RT_BUILD_BUILTINS": "ON",
+        "COMPILER_RT_BAREMETAL_BUILD": "ON",
+        "COMPILER_RT_DEFAULT_TARGET_ONLY": "ON",
+        "CRT_SUPPORTED_ARCH": "riscv32",
+        "CMAKE_C_COMPILER_TARGET": "riscv32-none-eabi"
+      },
+      "product": "libclang_rt.builtins-riscv32.a",
+      "installed": "libclang_rt.builtins-riscv32.a"
+    },
+    "picolibc": {
+      "meson": {
+        "config": "ESP32.config"
+      }
+    },
+    "build": {
+      "target": "riscv32-none-none-eabi",
+      "arch": "riscv32",
+      "cflags": [
+        "-march=rv32imac", "-mabi=ilp32",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-fno-exceptions",
+        "-fdeclspec",
+        "-fno-rtti",
+        "-D__ESP32__"
+      ],
+      "linker-script": "ESP32.ld"
+    }
+  }
+}

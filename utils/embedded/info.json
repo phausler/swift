@@ -1,0 +1,17 @@
+{
+  "schemaVersion" : "1.0",
+  "artifacts" : {
+    "%NAME%" : {
+      "variants" : [
+        {
+          "supportedTriples" : [
+            "%HOST%"
+          ],
+          "path" : "%NAME%/%TARGET%"
+        }
+      ],
+      "version" : "0.0.1",
+      "type" : "swiftSDK"
+    }
+  }
+}
