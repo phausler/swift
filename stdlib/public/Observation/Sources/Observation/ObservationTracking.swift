@@ -9,66 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-/// A type that manages observation tracking for properties of observable objects.
-///
-/// `ObservationTracking` provides the infrastructure for tracking access to properties
-/// of objects that conform to the `Observable` protocol. It maintains a list of accessed
-/// properties and manages observer registrations to detect when those properties change.
-///
-/// You typically don't create instances of `ObservationTracking` directly. Instead, use
-/// the global `withObservationTracking(_:onChange:)` function or its variants to
-/// automatically track property access and respond to changes.
-///
-/// ## Overview
-///
-/// The observation tracking system works by recording which properties are accessed during
-/// the execution of a closure, then installing observers for those specific properties.
-/// When any tracked property changes, the system invokes a change handler closure.
-///
-/// The following example demonstrates basic observation tracking:
-///
-/// ```swift
-/// @Observable
-/// class Car {
-///     var name: String
-///     var speed: Int
-/// }
-///
-/// let car = Car(name: "Betty", speed: 60)
-///
-/// withObservationTracking {
-///     // Only car.name is tracked
-///     print(car.name)
-/// } onChange: {
-///     print("Car name changed")
-/// }
-/// ```
-///
-/// ## Advanced Usage
-///
-/// For more control over observation behavior, use the options-based variant available
-/// in Swift 6.4 and later:
-///
-/// ```swift
-/// withObservationTracking(options: [.willSet, .deinit]) {
-///     print(car.name)
-/// } onChange: { event in
-///     if event.kind == .willSet {
-///         print("About to change")
-///     } else if event.kind == .deinit {
-///         print("Object deallocated")
-///     }
-/// }
-/// ```
-///
-/// ## Thread Safety
-///
-/// `ObservationTracking` is `Sendable` and thread-safe. All internal state is protected
-/// by critical sections, allowing observers to be installed and cancelled from any thread.
-///
-/// - Note: Observation tracking is scoped to the current thread. Properties accessed in
-///   the tracking closure are recorded on the thread that executes the closure.
-///
+/// A namespace for observation tracking utilities.
 @available(SwiftStdlib 5.9, *)
 public struct ObservationTracking: Sendable {
   struct Id {
@@ -277,13 +218,8 @@ public struct ObservationTracking: Sendable {
   /// Options for configuring observation tracking behavior.
   ///
   /// Use `Options` to specify when to receive change notifications and what types of
-  /// events to observe. You can combine multiple options using set algebra operations.
-  ///
-  /// ## Available Options
-  ///
-  /// - ``willSet``: Receive notifications before an accessed property of an @Observable type changes
-  /// - ``didSet``: Receive notifications after an accessed property of an @Observable type changes
-  /// - ``deinit``: Receive notifications when an accessed @Observable object is deallocated
+  /// events to observe. You can specify multiple options using array literal syntax
+  /// or set algebra operations.
   ///
   /// ## Examples
   ///
@@ -337,12 +273,18 @@ public struct ObservationTracking: Sendable {
       rawValue = RawValue()
     }
 
+    /// Receive notifications before an accessed property of an observable
+    /// type changes.
     @available(SwiftStdlib 6.4, *)
     public static var willSet: Options { Options(rawValue: .willSet) }
 
+    /// Receive notifications after an accessed property of an observable type
+    /// changes.
     @available(SwiftStdlib 6.4, *)
     public static var didSet: Options { Options(rawValue: .didSet) }
     
+    /// Receive notifications when an accessed observable object is
+    /// deallocated.
     @available(SwiftStdlib 6.4, *)
     public static var `deinit`: Options { Options(rawValue: .deinit) }
   }
@@ -350,8 +292,8 @@ public struct ObservationTracking: Sendable {
   /// An event that describes a change to an observed property.
   ///
   /// `Event` provides information about what triggered an observation change handler,
-  /// including the type of event (willSet, didSet, or deinit) and the specific property
-  /// that changed.
+  /// including the type of event (`willSet`, `didSet`, or `deinit`) and the specific
+  /// property that changed.
   ///
   /// ## Checking Event Types
   ///
@@ -385,17 +327,11 @@ public struct ObservationTracking: Sendable {
   /// }
   /// ```
   ///
-  /// - Note: The event kind of `.initial` is reserved for the `withContinuousObservation` function.
+  /// - Note: The event kind of `.initial` is only used for the
+  ///   `withContinuousObservation` function.
   @available(SwiftStdlib 6.4, *)
   public struct Event: ~Copyable {
     /// The kind of observation event that occurred.
-    ///
-    /// Use this type to distinguish between different types of observation events:
-    ///
-    /// - ``initial``: The initial continuous observation setup
-    /// - ``willSet``: Before a property value changes
-    /// - ``didSet``: After a property value changes
-    /// - ``deinit``: When the observed object is deallocated
     @available(SwiftStdlib 6.4, *)
     public struct Kind: Equatable, Sendable {
       enum RawValue {
@@ -407,15 +343,19 @@ public struct ObservationTracking: Sendable {
 
       var rawValue: RawValue
       
+      /// An event that occurs upon the initial setup of continuous observation.
       @available(SwiftStdlib 6.4, *)
       public static var initial: Kind { Kind(rawValue: .initial) }
       
+      /// An event that occurs before a property value changes.
       @available(SwiftStdlib 6.4, *)
       public static var willSet: Kind { Kind(rawValue: .willSet) }
       
+      /// An event that occurs after a property value changes.
       @available(SwiftStdlib 6.4, *)
       public static var didSet: Kind { Kind(rawValue: .didSet) }
       
+      /// An event that occurs when the observed object is deallocated.
       @available(SwiftStdlib 6.4, *)
       public static var `deinit`: Kind { Kind(rawValue: .deinit) }
     }
@@ -446,7 +386,8 @@ public struct ObservationTracking: Sendable {
       self.continuousState = continuousState
     }
 
-    /// Checks whether the specified key path matches the property that changed.
+    /// Returns a Boolean value indicating whether the specified key path matches the
+    /// property that changed.
     ///
     /// Use this method to determine if a specific property triggered the observation:
     ///
@@ -469,7 +410,8 @@ public struct ObservationTracking: Sendable {
     /// ```
     ///
     /// - Parameter keyPath: A key path to a property on an observable object.
-    /// - Returns: `true` if the specified property triggered this event; otherwise, `false`.
+    /// - Returns: `true` if the specified property triggered this event;
+    ///   otherwise, `false`.
     @available(SwiftStdlib 6.4, *)
     public func matches(_ keyPath: PartialKeyPath<some Observable>) -> Bool {
       return tracking?.changed == keyPath
@@ -477,8 +419,8 @@ public struct ObservationTracking: Sendable {
 
     /// Cancels continuous observation tracking.
     ///
-    /// Call this method to stop observing changes. Since `withObservationTracking` is one-shot
-    /// the cancellation has no effect in those uses so this is primarily intended to be used for `withContinuousObservation`.
+    /// Use this method within the closure parameter to the `withContinuousObservation`
+    /// function to stop observing changes.
     ///
     /// ```swift
     /// withContinuousObservation(options: .willSet) { event in
@@ -488,6 +430,9 @@ public struct ObservationTracking: Sendable {
     ///     }
     /// }
     /// ```
+    ///
+    /// This method has no effect when used in conjunction with a `withObservationTracking`
+    /// function, since those functions finish after the first observation.
     @available(SwiftStdlib 6.4, *)
     public func cancel() {
       tracking?.cancel()
@@ -604,26 +549,29 @@ fileprivate func generateAccessList<T: ~Copyable, Failure: Error>(
 /// Tracks access to properties and informs on the first change given a specific
 /// set of options.
 ///
+/// This method tracks access to any property within the `apply` closure, and
+/// informs the caller of the first value change made to participating properties
+/// by way of the `onChange` closure, or upon deinitialization of an observed object,
+/// depending on the specified options.
+///
 /// This method is a more advanced version of the `withObservationTracking` method.
-/// It has options for tracking deinitialization, specifying tracking starts on
-/// the `willSet` edge of changes and also the `didSet` edge of changes. The intent
-/// is still to provide the starts to transactions started in the `onChange` closure.
+/// You can specify whether to track changes on the `willSet` edge of changes, the
+/// `didSet` edge of changes, or deinitialization, or any combination of the three.
 ///
-/// The `onChange` closure contains a tracking event parameter to allow for the
-/// determination of the change origination and the change kind.
+/// Use the ``ObservationTracking.Event`` parameter with the `onChange` closure to
+/// determine the origin and kind of the change.
 ///
-/// - Notes: It is more often useful to specify the options of `.willSet` or `[.willSet, .deinit]`
-/// since that starts the transaction at the first access. Any inclusion of `.didSet`
-/// should be restricted for only cases where it is absolutely necessary for advanced
-/// and compatibility use cases.
+/// - Note: It is more often useful to specify the options of `.willSet` or
+///   `[.willSet, .deinit]`, since that starts the transaction at the first access of
+///   a tracked property. The use of `.didSet` should be restricted to
+///   cases where needed for compatibility and other advanced use cases.
 ///
 /// - Parameters:
-///     - options: Options to specify how observe specific changes and which changes to observe.
-///     - apply: A closure that contains properties to track.
-///     - onChange: The closure invoked when the value of a property changes.
-///
+///   - options: Options to specify how to observe the tracked changes.
+///   - apply: A closure that contains properties to track.
+///   - onChange: The closure invoked when the value of a property changes.
 /// - Returns: The value that the `apply` closure returns if it has a return
-/// value; otherwise, there is no return value.
+///   value; otherwise, there is no return value.
 @available(SwiftStdlib 6.4, *)
 public func withObservationTracking<Result: ~Copyable, Failure: Error>(
   options: ObservationTracking.Options,
@@ -681,17 +629,16 @@ public func withObservationTracking<Result: ~Copyable, Failure: Error>(
 ///
 /// This method tracks access to any property within the `apply` closure, and
 /// informs the caller of the first value change made to participating properties
-/// by way of the `onChange` closure.
-
-/// The closure is invoked within the property mutation on the `willSet` side of
-/// the change. This specifically is intended to allow for the development of
-/// starts of transactions. It is then also suggested that all call-outs within
-/// the `onChange` closure to schedule some action to re-evaluate the tracking
-/// later if the expectation is continuous (being continuous repeated observation).
+/// by way of the `onChange` closure. The `onChange` closure is invoked within the
+/// property mutation on the `willSet` side of the change, to allow for the
+/// development of starts of transactions.
 ///
-/// - Notes:
-/// Transactions started in the onChange should be ready to handle being called
-/// while a transaction is already active. This should appropriately avoid
+/// Because the `withObservationTracking` function finishes after the first change,
+/// for continuous observation, schedule some action to re-evaluate the tracking later
+/// from within the `onChange` closure.
+///
+/// - Note: Transactions started in the onChange should be ready to handle being
+/// called while a transaction is already active. This should appropriately avoid
 /// piling up additional invocations of the end of the transaction.
 ///
 /// The following code tracks changes to the name of cars, but it doesn't track
@@ -712,7 +659,7 @@ public func withObservationTracking<Result: ~Copyable, Failure: Error>(
 ///     - onChange: The closure invoked when the value of a property changes.
 ///
 /// - Returns: The value that the `apply` closure returns if it has a return
-/// value; otherwise, there is no return value.
+///   value; otherwise, there is no return value.
 @available(SwiftStdlib 5.9, *)
 public func withObservationTracking<T>(
   _ apply: () -> T,

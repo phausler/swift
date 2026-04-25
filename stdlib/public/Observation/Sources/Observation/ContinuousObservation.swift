@@ -11,21 +11,45 @@
 
 import _Concurrency
 
-/// Continuously tracks access to properties and informs on the first change given a specific
-/// set of options.
+/// Begins tracking changes to observable properties within the given closure,
+/// repeatedly calling the closure after each change.
 ///
-/// Unlike the other `withObservationTracking` functions this method continuously tracks changes
-/// defined by transactional changes. The `apply` closure is guaranteed to be invoked in the
-/// same isolation as the invocation of the `withContinuousObservation` function. This means
-/// that if the `withContinuousObservation` function is called on the main actor then the
-/// transactional events are invoked for the `apply` closure on the main actor as well.
+/// Unlike the other `withObservationTracking` functions, which track only the
+/// next change, the `withContinuousObservation` function continuously tracks
+/// changes until the returned token is discarded or explicitly cancelled.
+///
+/// In the following code sample, the `apply` closure is invoked immediately,
+/// and then again each time `model.someStringValue` is updated, at the
+/// `willSet` event. Observation and updating will continue until the
+/// `synchronization` token is discarded when the `Controller` class instance
+/// is deinitialized.
+///
+///     @MainActor
+///     final class Controller {
+///         var view: MyView
+///         var model: MyObservable
+///         let synchronization: ObservationTracking.Token
+///
+///         init(view: MyView, model: MyObservable) {
+///             synchronization = withContinuousObservationTracking(options: [.willSet]) {
+///                 [view, model] event in
+///                 view.label.text = model.someStringValue
+///             }
+///         }
+///     }
+///
+/// The `apply` closure is guaranteed to be called in the same isolation as the
+/// original call to the `withContinuousObservation` function. If
+/// `withContinuousObservation` function is called on the main actor, then the
+/// transactional events are invoked for the `apply` closure on the main actor
+/// as well.
 ///
 /// - Parameters:
-///     - options: Options to specify how observe specific changes and which changes to observe.
-///     - apply: A closure that contains properties to track and re-invoked when transactions end
-///              that were started by property changes.
-///
-/// - Returns: A token representing the observation used for cancellation. 
+///   - options: Options to specify which changes to observe.
+///   - apply: A closure that contains properties to track, which is re-invoked
+///     at the end of transactions started by property changes.
+/// - Returns: A token representing the observation, to be used for
+///   cancellation.
 @available(SwiftStdlib 6.4, *)
 public func withContinuousObservation(
   options: ObservationTracking.Options,
@@ -37,10 +61,16 @@ public func withContinuousObservation(
 
 @available(SwiftStdlib 6.4, *)
 extension ObservationTracking {
+  /// A token that represents a continous observation.
+  ///
+  /// As long as a `Token` is held, and not canceled by calling `cancel()`,
+  /// a continuous observation will keep calling its `apply` closure on
+  /// changes to the tracked properties.
   @available(SwiftStdlib 6.4, *)
   public struct Token: ~Copyable {
     fileprivate var state: _ManagedCriticalState<ContinuousObservation.State>
 
+    /// Cancels the related continuous observation.
     @available(SwiftStdlib 6.4, *)
     public consuming func cancel() {
         ContinuousObservation.State.cancel(state)
