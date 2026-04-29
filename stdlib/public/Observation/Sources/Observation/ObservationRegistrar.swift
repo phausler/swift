@@ -86,7 +86,8 @@ public struct ObservationRegistrar: Sendable {
     private var lookups = [AnyKeyPath : Set<Int>]()
 
     var trackingLists = Set<UnsafeRawPointer>()
-    
+    var generation: Int = 0
+
     internal mutating func generateId() -> Int {
       let available = (~used).trailingZeroBitCount
       if available < 64 {
@@ -207,25 +208,33 @@ public struct ObservationRegistrar: Sendable {
     }
 
     func startTrackingIfNeeded(_ tracking: UnsafeRawPointer) {
-      state.withCriticalRegion { state in
-        _ = state.trackingLists.insert(tracking)
+      _ = state.withCriticalRegion { state in
+        state.trackingLists.insert(tracking)
       }
     }
 
     func clearTracking(_ tracking: UnsafeRawPointer) {
-      state.withCriticalRegion { state in
+      _ = state.withCriticalRegion { state in
         state.trackingLists.remove(tracking)
       }
     }
-    
+
+    internal var generation: Int {
+      state.withCriticalRegion { $0.generation }
+    }
+
     internal func willSet<Subject: Observable, Member>(
        _ subject: Subject,
        keyPath: KeyPath<Subject, Member>
     ) {
-      let tracking = state.withCriticalRegion {
-        return $0.willSet(keyPath: keyPath) 
+      let currentTracking = _ThreadLocal.value.map { UnsafeRawPointer($0) }
+      let actions = state.withCriticalRegion { state -> [@Sendable (AnyKeyPath) -> Void] in
+        if currentTracking == nil || !state.trackingLists.contains(currentTracking!) {
+          state.generation &+= 1
+        }
+        return state.willSet(keyPath: keyPath)
       }
-      for action in tracking {
+      for action in actions {
         action(keyPath)
       }
     }
@@ -234,10 +243,10 @@ public struct ObservationRegistrar: Sendable {
       _ subject: Subject,
       keyPath: KeyPath<Subject, Member>
     ) {
-      let tracking = state.withCriticalRegion {
-        return $0.didSet(keyPath: keyPath) 
+      let actions = state.withCriticalRegion {
+        return $0.didSet(keyPath: keyPath)
       }
-      for action in tracking {
+      for action in actions {
         action(keyPath)
       }
     }
@@ -282,7 +291,6 @@ public struct ObservationRegistrar: Sendable {
       .assumingMemoryBound(to: ObservationTracking._AccessList?.self) {
       if trackingPtr.pointee == nil {
         trackingPtr.pointee = ObservationTracking._AccessList()
-        context.startTrackingIfNeeded(trackingPtr)
       }
       trackingPtr.pointee?.addAccess(keyPath: keyPath, context: context)
     }

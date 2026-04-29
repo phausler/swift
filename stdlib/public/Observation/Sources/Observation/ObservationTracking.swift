@@ -19,12 +19,14 @@ public struct ObservationTracking: Sendable {
 
   struct Entry: @unchecked Sendable {
     let context: ObservationRegistrar.Context
-    
+
     var properties: Set<AnyKeyPath>
-    
-    init(_ context: ObservationRegistrar.Context, properties: Set<AnyKeyPath> = []) {
+    var generation: Int
+
+    init(_ context: ObservationRegistrar.Context, properties: Set<AnyKeyPath> = [], generation: Int = 0) {
       self.context = context
       self.properties = properties
+      self.generation = generation
     }
     
     func addWillSetObserver(_ changed: @Sendable @escaping (AnyKeyPath) -> Void) -> Int {
@@ -48,7 +50,7 @@ public struct ObservationTracking: Sendable {
     }
     
     func union(_ entry: Entry) -> Entry {
-      return Entry(context, properties: properties.union(entry.properties))
+      return Entry(context, properties: properties.union(entry.properties), generation: generation)
     }
   }
   
@@ -62,13 +64,28 @@ public struct ObservationTracking: Sendable {
       keyPath: PartialKeyPath<Subject>,
       context: ObservationRegistrar.Context
     ) {
-      entries[context.id, default: Entry(context)].insert(keyPath)
+      if entries[context.id] == nil {
+        if let trackingPtr = _ThreadLocal.value {
+          context.startTrackingIfNeeded(trackingPtr)
+        }
+        entries[context.id] = Entry(context, generation: context.generation)
+      }
+      entries[context.id]!.insert(keyPath)
     }
     
     internal mutating func merge(_ other: _AccessList) {
       entries.merge(other.entries) { existing, entry in
         existing.union(entry)
       }
+    }
+
+    internal func hasGenerationChanged() -> Bool {
+      for entry in entries.values {
+        if entry.context.generation != entry.generation {
+          return true
+        }
+      }
+      return false
     }
   }
 
@@ -139,6 +156,10 @@ public struct ObservationTracking: Sendable {
       onChange()
       tracking.cancel()
     })
+    if list.hasGenerationChanged() {
+      onChange()
+      tracking.cancel()
+    }
   }
 
   struct State: @unchecked Sendable {
@@ -443,6 +464,10 @@ public func withObservationTracking<Result: ~Copyable, Failure: Error>(
   }
   let tracking = ObservationTracking(accessListResult.accessList)
   ObservationTracking._installTracking(options: options, tracking, willSet: willSet, didSet: didSet, deinit: `deinit`)
+  if let accessList = accessListResult.accessList, accessList.hasGenerationChanged() {
+    willSet?(tracking)
+    didSet?(tracking)
+  }
   return accessListResult.result
 }
 
@@ -491,7 +516,12 @@ public func withObservationTracking<T>(
   didSet: @escaping @Sendable (ObservationTracking) -> Void
 ) -> T {
   let accessListResult = generateAccessList(apply)
-  ObservationTracking._installTracking(ObservationTracking(accessListResult.accessList), willSet: willSet, didSet: didSet)
+  let tracking = ObservationTracking(accessListResult.accessList)
+  ObservationTracking._installTracking(tracking, willSet: willSet, didSet: didSet)
+  if let accessList = accessListResult.accessList, accessList.hasGenerationChanged() {
+    willSet(tracking)
+    didSet(tracking)
+  }
   return accessListResult.result
 }
 
@@ -502,7 +532,11 @@ public func withObservationTracking<T>(
   willSet: @escaping @Sendable (ObservationTracking) -> Void
 ) -> T {
   let accessListResult = generateAccessList(apply)
-  ObservationTracking._installTracking(ObservationTracking(accessListResult.accessList), willSet: willSet, didSet: nil)
+  let tracking = ObservationTracking(accessListResult.accessList)
+  ObservationTracking._installTracking(tracking, willSet: willSet, didSet: nil)
+  if let accessList = accessListResult.accessList, accessList.hasGenerationChanged() {
+    willSet(tracking)
+  }
   return accessListResult.result
 }
 
@@ -513,6 +547,10 @@ public func withObservationTracking<T>(
   didSet: @escaping @Sendable (ObservationTracking) -> Void
 ) -> T {
   let accessListResult = generateAccessList(apply)
-  ObservationTracking._installTracking(ObservationTracking(accessListResult.accessList), willSet: nil, didSet: didSet)
+  let tracking = ObservationTracking(accessListResult.accessList)
+  ObservationTracking._installTracking(tracking, willSet: nil, didSet: didSet)
+  if let accessList = accessListResult.accessList, accessList.hasGenerationChanged() {
+    didSet(tracking)
+  }
   return accessListResult.result
 }
